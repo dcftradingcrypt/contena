@@ -1,0 +1,10 @@
+name: sma_crossover
+fast_window: 12
+slow_window: 36
+parameter_candidates:
+  - fast_window: 8
+    slow_window: 24
+  - fast_window: 12
+    slow_window: 36
+  - fast_window: 16
+    slow_window: 48

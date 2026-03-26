@@ -1,0 +1,9 @@
+experiment_id: example_dryrun
+data_path: ../data/market/example_ohlcv.csv
+artifact_dir: ../artifacts/dryrun/example_dryrun
+strategy_config: strategies/example_sma.yaml
+initial_cash: 10000
+fee_bps: 5
+dryrun:
+  latency_bars: 1
+  slippage_bps: 8

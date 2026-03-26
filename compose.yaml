@@ -1,0 +1,65 @@
+services:
+  market-data:
+    build:
+      context: .
+      dockerfile: docker/market-data.Dockerfile
+    profiles: ["research", "paper", "live"]
+    working_dir: /app
+    volumes:
+      - ./configs:/app/configs
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+    command: ["python", "-m", "contena.cli", "seed-data", "--output", "data/market/example_ohlcv.csv"]
+
+  strategy-research:
+    build:
+      context: .
+      dockerfile: docker/research.Dockerfile
+    profiles: ["research"]
+    working_dir: /app
+    depends_on:
+      - market-data
+    volumes:
+      - ./configs:/app/configs
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+    command: ["python", "-m", "contena.cli", "backtest", "--config", "configs/backtest.example.yaml"]
+
+  strategy-executor-paper:
+    build:
+      context: .
+      dockerfile: docker/executor.Dockerfile
+    profiles: ["paper"]
+    working_dir: /app
+    depends_on:
+      - market-data
+      - redis
+    volumes:
+      - ./configs:/app/configs
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+    command: ["python", "-m", "contena.cli", "dryrun", "--config", "configs/dryrun.example.yaml"]
+
+  strategy-executor-live:
+    build:
+      context: .
+      dockerfile: docker/executor.Dockerfile
+    profiles: ["live"]
+    working_dir: /app
+    depends_on:
+      - market-data
+      - redis
+    restart: "no"
+    volumes:
+      - ./configs:/app/configs
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+    command: ["python", "-m", "contena.cli", "live", "--config", "configs/dryrun.example.yaml"]
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["paper", "live"]

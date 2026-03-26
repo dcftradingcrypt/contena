@@ -1,0 +1,10 @@
+experiment_id: example_wfo
+data_path: ../data/market/example_ohlcv.csv
+artifact_dir: ../artifacts/wfo/example_wfo
+strategy_config: strategies/example_sma.yaml
+initial_cash: 10000
+fee_bps: 5
+wfo:
+  train_bars: 240
+  test_bars: 80
+  step_bars: 80

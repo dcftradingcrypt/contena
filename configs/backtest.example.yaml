@@ -1,0 +1,7 @@
+experiment_id: example_backtest
+data_path: ../data/market/example_ohlcv.csv
+artifact_dir: ../artifacts/backtests/example_backtest
+strategy_config: strategies/example_sma.yaml
+initial_cash: 10000
+fee_bps: 5
+slippage_bps: 0
