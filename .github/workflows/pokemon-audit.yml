@@ -19,7 +19,7 @@ jobs:
       - name: Prepare fixed work directories
         run: |
           sudo rm -rf /mnt/data/formal_inputs /mnt/data/formal_parsed /mnt/data/formal_audit_data /mnt/data/battledata_repo
-          sudo mkdir -p /mnt/data/formal_audit_data
+          sudo mkdir -p /mnt/data/formal_audit_data /mnt/data/formal_parsed
           sudo chown -R "$USER":"$USER" /mnt/data
           cp pokemon_audit/team_config_formal.json /mnt/data/formal_audit_data/team_config_formal.json
       - name: Clone mapping repository at a recorded commit
@@ -28,11 +28,17 @@ jobs:
           git -C /mnt/data/battledata_repo sparse-checkout set data/api
           git -C /mnt/data/battledata_repo rev-parse HEAD | tee /mnt/data/formal_audit_data/mapping_commit.txt
       - name: Capture synchronized formal snapshot
-        run: PYTHONPATH=pokemon_audit python pokemon_audit/fetch_snapshot.py
+        run: |
+          set -o pipefail
+          PYTHONPATH=pokemon_audit python pokemon_audit/fetch_snapshot.py 2>&1 | tee /mnt/data/formal_audit_data/fetch_snapshot.log
       - name: Parse formal evidence
-        run: PYTHONPATH=pokemon_audit python pokemon_audit/parse_snapshot.py
+        run: |
+          set -o pipefail
+          PYTHONPATH=pokemon_audit python pokemon_audit/parse_snapshot.py 2>&1 | tee /mnt/data/formal_audit_data/parse_snapshot.log
       - name: Build one formal build per opponent
-        run: PYTHONPATH=pokemon_audit python pokemon_audit/build_evidence.py
+        run: |
+          set -o pipefail
+          PYTHONPATH=pokemon_audit python pokemon_audit/build_evidence.py 2>&1 | tee /mnt/data/formal_audit_data/build_evidence.log
       - name: Show formal snapshot summary
         run: |
           cat /mnt/data/formal_inputs/formal_snapshot/snapshot_manifest.json
@@ -43,11 +49,12 @@ jobs:
           print({'opponents':len(d['opponents']),'builds':len(d['builds']),'snapshot':d['snapshot_jst']})
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pokemon-audit-formal-stage1
           path: |
             /mnt/data/formal_inputs/
             /mnt/data/formal_parsed/
             /mnt/data/formal_audit_data/
-          if-no-files-found: error
+          if-no-files-found: warn
           compression-level: 6
