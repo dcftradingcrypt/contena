@@ -53,12 +53,13 @@ jobs:
       - name: Prepare corrected runtime scripts
         run: |
           python pokemon_audit/prepare_runtime_scripts.py
+          node --check /mnt/data/formal_audit_data/scripts/validate_engine_inputs_v2.js
           node --check /mnt/data/formal_audit_data/scripts/run_ohko_state.js
           node --check /mnt/data/formal_audit_data/scripts/run_two_hit_state.js
       - name: Validate engine inputs and exact forms
         run: |
           set -o pipefail
-          node pokemon_audit/validate_engine_inputs_v2.js 2>&1 | tee /mnt/data/formal_audit_data/engine_input_validation.log
+          node /mnt/data/formal_audit_data/scripts/validate_engine_inputs_v2.js 2>&1 | tee /mnt/data/formal_audit_data/engine_input_validation.log
       - name: Run formal one-hit scans for all 12 states
         shell: bash
         run: |
@@ -74,12 +75,13 @@ jobs:
       - name: Merge state matrices, choose switches, and validate core output
         run: |
           set -o pipefail
-          python pokemon_audit/merge_results.py 2>&1 | tee /mnt/data/formal_audit_data/merge_results.log
+          python /mnt/data/formal_audit_data/scripts/merge_results.py 2>&1 | tee /mnt/data/formal_audit_data/merge_results.log
       - name: Record repository provenance
         run: |
           git rev-parse HEAD > /mnt/data/formal_audit_data/runner_commit.txt
-          cp pokemon_audit/*.py pokemon_audit/*.js pokemon_audit/*.json /mnt/data/formal_audit_data/scripts/
-          find /mnt/data/formal_audit_data -maxdepth 2 -type f -printf '%p %s bytes\n' | sort | tee /mnt/data/formal_audit_data/file_inventory.txt
+          mkdir -p /mnt/data/formal_audit_data/source_scripts
+          cp pokemon_audit/*.py pokemon_audit/*.js pokemon_audit/*.json /mnt/data/formal_audit_data/source_scripts/
+          find /mnt/data/formal_audit_data -maxdepth 3 -type f -printf '%p %s bytes\n' | sort | tee /mnt/data/formal_audit_data/file_inventory.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
