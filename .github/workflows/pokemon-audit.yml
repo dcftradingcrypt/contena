@@ -1,0 +1,118 @@
+name: pokemon-audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Apply the audited full-envelope runtime patch
+        run: python pokemon_audit/apply_envelope_patch.py
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
+      - name: Download the immutable synchronized snapshot from the accepted base run
+        uses: actions/download-artifact@v4
+        with:
+          name: pokemon-audit-core
+          run-id: 30369987611
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/base_audit
+      - name: Prepare fixed work directories from the pinned snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /mnt/data/formal_inputs /mnt/data/formal_parsed /mnt/data/formal_audit_data /mnt/data/battledata_repo /mnt/data/damage_calc_repo
+          sudo mkdir -p /mnt/data/formal_audit_data /mnt/data/formal_parsed
+          sudo chown -R "$USER":"$USER" /mnt/data
+          test -f /tmp/base_audit/formal_inputs/formal_snapshot/snapshot_manifest.json
+          test -f /tmp/base_audit/formal_parsed/component_evidence.csv
+          cp -a /tmp/base_audit/formal_inputs /mnt/data/
+          cp -a /tmp/base_audit/formal_parsed/. /mnt/data/formal_parsed/
+          cp pokemon_audit/team_config_formal.json /mnt/data/formal_audit_data/team_config_formal.json
+          cp /tmp/base_audit/formal_audit_data/mapping_commit.txt /mnt/data/formal_audit_data/base_mapping_commit.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest=json.loads(Path('/mnt/data/formal_inputs/formal_snapshot/snapshot_manifest.json').read_text())
+          assert manifest['snapshot_jst']=='2026年7月28日 23:30', manifest
+          assert manifest['detail_count']==100
+          assert manifest['all_detail_timestamps_match']
+          assert manifest['start_end_tier_identical']
+          print(manifest)
+          PY
+      - name: Clone mapping repository at the exact base-run commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT="$(cat /mnt/data/formal_audit_data/base_mapping_commit.txt)"
+          git clone https://github.com/Gheist23/pokemonbattledata.git /mnt/data/battledata_repo
+          git -C /mnt/data/battledata_repo checkout "$COMMIT"
+          git -C /mnt/data/battledata_repo rev-parse HEAD | tee /mnt/data/formal_audit_data/mapping_commit.txt
+          test "$(git -C /mnt/data/battledata_repo rev-parse HEAD)" = "$COMMIT"
+      - name: Build the complete threshold-component envelope
+        run: |
+          set -o pipefail
+          PYTHONPATH=pokemon_audit python pokemon_audit/build_evidence.py 2>&1 | tee /mnt/data/formal_audit_data/build_evidence.log
+      - name: Clone and build the fixed Champions damage engine
+        run: |
+          git clone https://github.com/smogon/damage-calc.git /mnt/data/damage_calc_repo
+          git -C /mnt/data/damage_calc_repo checkout fc495808fca595479762c1b93d237a7f28254298
+          git -C /mnt/data/damage_calc_repo rev-parse HEAD | tee /mnt/data/formal_audit_data/damage_engine_commit.txt
+          cd /mnt/data/damage_calc_repo
+          npm ci
+          npm run build
+      - name: Prepare runtime scripts
+        run: |
+          python pokemon_audit/prepare_runtime_scripts.py
+          node --check /mnt/data/formal_audit_data/scripts/validate_engine_inputs_v2.js
+          node --check /mnt/data/formal_audit_data/scripts/run_ohko_state.js
+          node --check /mnt/data/formal_audit_data/scripts/run_two_hit_state.js
+      - name: Validate all envelope inputs and exact forms
+        run: |
+          set -o pipefail
+          node /mnt/data/formal_audit_data/scripts/validate_engine_inputs_v2.js 2>&1 | tee /mnt/data/formal_audit_data/engine_input_validation.log
+      - name: Run complete one-hit scans for all 12 states
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATES=(standing_archaludon standing_hippowdon standing_garchomp standing_delphox standing_dragonite standing_greninja switch_archaludon switch_hippowdon switch_garchomp switch_delphox switch_dragonite switch_greninja)
+          printf '%s\n' "${STATES[@]}" | xargs -n1 -P4 node /mnt/data/formal_audit_data/scripts/run_ohko_state.js
+      - name: Run complete stateful 256-path two-hit scans
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATES=(standing_archaludon standing_hippowdon standing_garchomp standing_delphox standing_dragonite standing_greninja switch_archaludon switch_hippowdon switch_garchomp switch_delphox switch_dragonite switch_greninja)
+          printf '%s\n' "${STATES[@]}" | xargs -n1 -P4 node /mnt/data/formal_audit_data/scripts/run_two_hit_state.js
+      - name: Merge matrices, compare every switch candidate, and validate
+        run: |
+          set -o pipefail
+          python /mnt/data/formal_audit_data/scripts/merge_results.py 2>&1 | tee /mnt/data/formal_audit_data/merge_results.log
+      - name: Record repository provenance
+        run: |
+          git rev-parse HEAD > /mnt/data/formal_audit_data/runner_commit.txt
+          mkdir -p /mnt/data/formal_audit_data/source_scripts
+          cp pokemon_audit/*.py pokemon_audit/*.js pokemon_audit/*.json /mnt/data/formal_audit_data/source_scripts/
+          find /mnt/data/formal_audit_data -maxdepth 3 -type f -printf '%p %s bytes\n' | sort | tee /mnt/data/formal_audit_data/file_inventory.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pokemon-audit-envelope-core
+          path: |
+            /mnt/data/formal_inputs/
+            /mnt/data/formal_parsed/
+            /mnt/data/formal_audit_data/
+          if-no-files-found: warn
+          compression-level: 6
