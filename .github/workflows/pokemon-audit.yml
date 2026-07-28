@@ -8,20 +8,46 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install scraper dependencies
+      - name: Install Python dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
-      - name: Fetch and inspect OP.GG pages
+      - name: Prepare fixed work directories
         run: |
-          python pokemon_audit/scrape_debug.py
-          python pokemon_audit/detail_debug.py
+          sudo rm -rf /mnt/data/formal_inputs /mnt/data/formal_parsed /mnt/data/formal_audit_data /mnt/data/battledata_repo
+          sudo mkdir -p /mnt/data/formal_audit_data
+          sudo chown -R "$USER":"$USER" /mnt/data
+          cp pokemon_audit/team_config_formal.json /mnt/data/formal_audit_data/team_config_formal.json
+      - name: Clone mapping repository at a recorded commit
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/Gheist23/pokemonbattledata.git /mnt/data/battledata_repo
+          git -C /mnt/data/battledata_repo sparse-checkout set data/api
+          git -C /mnt/data/battledata_repo rev-parse HEAD | tee /mnt/data/formal_audit_data/mapping_commit.txt
+      - name: Capture synchronized formal snapshot
+        run: PYTHONPATH=pokemon_audit python pokemon_audit/fetch_snapshot.py
+      - name: Parse formal evidence
+        run: PYTHONPATH=pokemon_audit python pokemon_audit/parse_snapshot.py
+      - name: Build one formal build per opponent
+        run: PYTHONPATH=pokemon_audit python pokemon_audit/build_evidence.py
+      - name: Show formal snapshot summary
+        run: |
+          cat /mnt/data/formal_inputs/formal_snapshot/snapshot_manifest.json
+          python - <<'PY'
+          import json
+          p='/mnt/data/formal_audit_data/opponent_builds.json'
+          d=json.load(open(p))
+          print({'opponents':len(d['opponents']),'builds':len(d['builds']),'snapshot':d['snapshot_jst']})
+          PY
       - uses: actions/upload-artifact@v4
         with:
-          name: pokemon-audit-debug
-          path: out/
+          name: pokemon-audit-formal-stage1
+          path: |
+            /mnt/data/formal_inputs/
+            /mnt/data/formal_parsed/
+            /mnt/data/formal_audit_data/
           if-no-files-found: error
+          compression-level: 6
