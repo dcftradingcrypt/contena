@@ -28,7 +28,7 @@ jobs:
           curl -fL "$BASE/Greninja.png" -o out/team_art/Greninja.png
           printf '%s\n' 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb > out/team_art/SOURCE_COMMIT.txt
           sha256sum out/team_art/*.png > out/team_art/SHA256SUMS.txt
-          identify out/team_art/*.png > out/team_art/image_dimensions.txt
+          file out/team_art/*.png > out/team_art/image_dimensions.txt
 
           # Translation sources are useful but non-blocking; preserve every fixed-commit file that exists.
           TBASE='https://raw.githubusercontent.com/seraveist/PkmChampions-Calculator/1df2fdd8ea7b49cd5c108aa94eee1edc39cb9386'
