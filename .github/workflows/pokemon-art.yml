@@ -1,0 +1,39 @@
+name: pokemon-art
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  art:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch fixed official team art
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/Gheist23/pokemonbattledata.git source
+          git -C source sparse-checkout init --cone
+          git -C source sparse-checkout set pokemon_champions_assets/pokemon
+          git -C source checkout 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb
+          mkdir -p out/team_art
+          cp "source/pokemon_champions_assets/pokemon/Archaludon.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Hippowdon.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Garchomp.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Mega Garchomp.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Delphox.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Mega Delphox.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Dragonite.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Mega Dragonite.png" out/team_art/
+          cp "source/pokemon_champions_assets/pokemon/Greninja.png" out/team_art/
+          printf '%s\n' 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb > out/team_art/SOURCE_COMMIT.txt
+          sha256sum out/team_art/*.png > out/team_art/SHA256SUMS.txt
+          identify out/team_art/*.png > out/team_art/image_dimensions.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pokemon-formal-team-art
+          path: out/team_art/
+          if-no-files-found: error
+          compression-level: 6
