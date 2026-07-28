@@ -16,8 +16,10 @@ jobs:
           python-version: '3.12'
       - name: Install scraper dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
-      - name: Fetch and inspect OP.GG tier page
-        run: python pokemon_audit/scrape_debug.py
+      - name: Fetch and inspect OP.GG pages
+        run: |
+          python pokemon_audit/scrape_debug.py
+          python pokemon_audit/detail_debug.py
       - uses: actions/upload-artifact@v4
         with:
           name: pokemon-audit-debug
