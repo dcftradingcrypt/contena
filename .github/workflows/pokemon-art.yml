@@ -8,37 +8,34 @@ on:
 jobs:
   art:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch fixed official team art and Japanese dictionaries
+      - name: Fetch fixed official team art
         run: |
           set -euo pipefail
-          rm -rf source calculator out
-          git init source
-          git -C source remote add origin https://github.com/Gheist23/pokemonbattledata.git
-          git -C source fetch --depth 1 origin 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb
-          git -C source checkout FETCH_HEAD -- pokemon_champions_assets/pokemon
+          rm -rf out
           mkdir -p out/team_art out/translation
-          cp "source/pokemon_champions_assets/pokemon/Archaludon.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Hippowdon.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Garchomp.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Mega Garchomp.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Delphox.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Mega Delphox.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Dragonite.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Mega Dragonite.png" out/team_art/
-          cp "source/pokemon_champions_assets/pokemon/Greninja.png" out/team_art/
+          BASE='https://raw.githubusercontent.com/Gheist23/pokemonbattledata/78ef9bbfc07dda88edadb71ee6017a0e145f6cbb/pokemon_champions_assets/pokemon'
+          curl -fL "$BASE/Archaludon.png" -o out/team_art/Archaludon.png
+          curl -fL "$BASE/Hippowdon.png" -o out/team_art/Hippowdon.png
+          curl -fL "$BASE/Garchomp.png" -o out/team_art/Garchomp.png
+          curl -fL "$BASE/Mega%20Garchomp.png" -o 'out/team_art/Mega Garchomp.png'
+          curl -fL "$BASE/Delphox.png" -o out/team_art/Delphox.png
+          curl -fL "$BASE/Mega%20Delphox.png" -o 'out/team_art/Mega Delphox.png'
+          curl -fL "$BASE/Dragonite.png" -o out/team_art/Dragonite.png
+          curl -fL "$BASE/Mega%20Dragonite.png" -o 'out/team_art/Mega Dragonite.png'
+          curl -fL "$BASE/Greninja.png" -o out/team_art/Greninja.png
           printf '%s\n' 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb > out/team_art/SOURCE_COMMIT.txt
           sha256sum out/team_art/*.png > out/team_art/SHA256SUMS.txt
           identify out/team_art/*.png > out/team_art/image_dimensions.txt
 
-          git clone --filter=blob:none --no-checkout https://github.com/seraveist/PkmChampions-Calculator.git calculator
-          git -C calculator fetch --depth 1 origin 1df2fdd8ea7b49cd5c108aa94eee1edc39cb9386
-          git -C calculator checkout FETCH_HEAD -- data/ko data/text data/natures.ts
-          cp -R calculator/data/ko out/translation/ko
-          cp -R calculator/data/text out/translation/text
-          cp calculator/data/natures.ts out/translation/
+          # Translation sources are useful but non-blocking; preserve every fixed-commit file that exists.
+          TBASE='https://raw.githubusercontent.com/seraveist/PkmChampions-Calculator/1df2fdd8ea7b49cd5c108aa94eee1edc39cb9386'
+          for f in data/ko/moves.json data/ko/desc-moves.json data/natures.ts data/text/items.ts data/text/abilities.ts data/text/moves.ts; do
+            mkdir -p "out/translation/$(dirname "$f")"
+            curl -fL "$TBASE/$f" -o "out/translation/$f" || rm -f "out/translation/$f"
+          done
           printf '%s\n' 1df2fdd8ea7b49cd5c108aa94eee1edc39cb9386 > out/translation/SOURCE_COMMIT.txt
           find out -type f -printf '%p %s bytes\n' | sort > out/file_inventory.txt
       - uses: actions/upload-artifact@v4
