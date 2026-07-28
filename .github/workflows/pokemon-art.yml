@@ -8,17 +8,18 @@ on:
 jobs:
   art:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch fixed official team art
+      - name: Fetch fixed official team art and Japanese dictionaries
         run: |
           set -euo pipefail
-          git clone --filter=blob:none --no-checkout https://github.com/Gheist23/pokemonbattledata.git source
-          git -C source sparse-checkout init --cone
-          git -C source sparse-checkout set pokemon_champions_assets/pokemon
-          git -C source checkout 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb
-          mkdir -p out/team_art
+          rm -rf source calculator out
+          git init source
+          git -C source remote add origin https://github.com/Gheist23/pokemonbattledata.git
+          git -C source fetch --depth 1 origin 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb
+          git -C source checkout FETCH_HEAD -- pokemon_champions_assets/pokemon
+          mkdir -p out/team_art out/translation
           cp "source/pokemon_champions_assets/pokemon/Archaludon.png" out/team_art/
           cp "source/pokemon_champions_assets/pokemon/Hippowdon.png" out/team_art/
           cp "source/pokemon_champions_assets/pokemon/Garchomp.png" out/team_art/
@@ -31,9 +32,18 @@ jobs:
           printf '%s\n' 78ef9bbfc07dda88edadb71ee6017a0e145f6cbb > out/team_art/SOURCE_COMMIT.txt
           sha256sum out/team_art/*.png > out/team_art/SHA256SUMS.txt
           identify out/team_art/*.png > out/team_art/image_dimensions.txt
+
+          git clone --filter=blob:none --no-checkout https://github.com/seraveist/PkmChampions-Calculator.git calculator
+          git -C calculator fetch --depth 1 origin 1df2fdd8ea7b49cd5c108aa94eee1edc39cb9386
+          git -C calculator checkout FETCH_HEAD -- data/ko data/text data/natures.ts
+          cp -R calculator/data/ko out/translation/ko
+          cp -R calculator/data/text out/translation/text
+          cp calculator/data/natures.ts out/translation/
+          printf '%s\n' 1df2fdd8ea7b49cd5c108aa94eee1edc39cb9386 > out/translation/SOURCE_COMMIT.txt
+          find out -type f -printf '%p %s bytes\n' | sort > out/file_inventory.txt
       - uses: actions/upload-artifact@v4
         with:
           name: pokemon-formal-team-art
-          path: out/team_art/
+          path: out/
           if-no-files-found: error
           compression-level: 6
