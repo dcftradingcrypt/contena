@@ -87,14 +87,29 @@ def main() -> None:
             win_usage = win_move.get(move_id, 0.0)
             selected = usage >= MOVE_USAGE_THRESHOLD or win_usage >= WIN_MOVE_THRESHOLD
             row = {
-                'opponent_rank': rank, 'slug': slug, 'pokemon_ja': top['name_ja'], 'pokemon_en': name_en,
-                'snapshot_jst': manifest['snapshot_jst'], 'category': 'move', 'component_rank': component_rank,
-                'component_id': move_id, 'name': meta['name'], 'key': meta.get('key', ''),
-                'usage_percent': usage, 'winning_usage_percent': win_usage, 'selected_by_threshold': selected,
-                'type': meta.get('type', ''), 'move_category': meta.get('category', ''), 'power': meta.get('power', ''),
-                'accuracy': meta.get('accuracy', ''), 'priority': meta.get('priority', 0), 'spread': '',
-                'hp_points': '', 'attack_points': '', 'defense_points': '', 'sp_atk_points': '', 'sp_def_points': '', 'speed_points': '',
-                'source_file': str(html_path.relative_to(BASE)), 'source_url': top['detail_url'],
+                'opponent_rank': rank,
+                'slug': slug,
+                'pokemon_ja': top['name_ja'],
+                'pokemon_en': name_en,
+                'snapshot_jst': manifest['snapshot_jst'],
+                'category': 'move',
+                'component_rank': component_rank,
+                'component_id': move_id,
+                'name': meta['name'],
+                'key': meta.get('key', ''),
+                'usage_percent': usage,
+                'winning_usage_percent': win_usage,
+                'selected_by_threshold': selected,
+                'type': meta.get('type', ''),
+                'move_category': meta.get('category', ''),
+                'power': meta.get('power', ''),
+                'accuracy': meta.get('accuracy', ''),
+                'priority': meta.get('priority', 0),
+                'spread': '',
+                'hp_points': '', 'attack_points': '', 'defense_points': '',
+                'sp_atk_points': '', 'sp_def_points': '', 'speed_points': '',
+                'source_file': str(html_path.relative_to(BASE)),
+                'source_url': top['detail_url'],
             }
             move_components.append(row)
             all_components.append(row)
@@ -110,17 +125,37 @@ def main() -> None:
             for component_rank, source in enumerate(source_rows, 1):
                 component_id = int(source['id'])
                 meta = lookup_index.get(component_id)
-                if meta is None:
-                    raise RuntimeError(f'{category} lookup missing rank={rank} id={component_id}')
+                # OP.GG's singleDetail nature IDs are zero-based, while lookupData.natures IDs are one-based.
+                if meta is None and category == 'stat_alignment':
+                    meta = lookup_index.get(component_id + 1)
                 usage = float(source.get('usagePercent') or 0)
+                selected = usage >= OTHER_THRESHOLD
+                # OP.GG occasionally omits metadata for a sub-threshold tenth entry.
+                # Such a component is retained as an unresolved appendix row but can never enter the main build.
+                if meta is None and selected:
+                    raise RuntimeError(f'{category} lookup missing for threshold-passing component rank={rank} id={component_id}')
+                if meta is None:
+                    meta = {'name': f'UNRESOLVED_{category.upper()}_ID_{component_id}', 'key': ''}
                 row = {
-                    'opponent_rank': rank, 'slug': slug, 'pokemon_ja': top['name_ja'], 'pokemon_en': name_en,
-                    'snapshot_jst': manifest['snapshot_jst'], 'category': category, 'component_rank': component_rank,
-                    'component_id': component_id, 'name': meta['name'], 'key': meta.get('key', ''),
-                    'usage_percent': usage, 'winning_usage_percent': '', 'selected_by_threshold': usage >= OTHER_THRESHOLD,
-                    'type': '', 'move_category': '', 'power': '', 'accuracy': '', 'priority': '', 'spread': '',
-                    'hp_points': '', 'attack_points': '', 'defense_points': '', 'sp_atk_points': '', 'sp_def_points': '', 'speed_points': '',
-                    'source_file': str(html_path.relative_to(BASE)), 'source_url': top['detail_url'],
+                    'opponent_rank': rank,
+                    'slug': slug,
+                    'pokemon_ja': top['name_ja'],
+                    'pokemon_en': name_en,
+                    'snapshot_jst': manifest['snapshot_jst'],
+                    'category': category,
+                    'component_rank': component_rank,
+                    'component_id': component_id,
+                    'name': meta['name'],
+                    'key': meta.get('key', ''),
+                    'usage_percent': usage,
+                    'winning_usage_percent': '',
+                    'selected_by_threshold': selected,
+                    'type': '', 'move_category': '', 'power': '', 'accuracy': '', 'priority': '',
+                    'spread': '',
+                    'hp_points': '', 'attack_points': '', 'defense_points': '',
+                    'sp_atk_points': '', 'sp_def_points': '', 'speed_points': '',
+                    'source_file': str(html_path.relative_to(BASE)),
+                    'source_url': top['detail_url'],
                 }
                 component_rows.append(row)
                 all_components.append(row)
@@ -132,19 +167,31 @@ def main() -> None:
             points = spread_points(spread)
             usage = float(source.get('usagePercent') or 0)
             row = {
-                'opponent_rank': rank, 'slug': slug, 'pokemon_ja': top['name_ja'], 'pokemon_en': name_en,
-                'snapshot_jst': manifest['snapshot_jst'], 'category': 'stat_points', 'component_rank': component_rank,
-                'component_id': spread, 'name': '', 'key': '', 'usage_percent': usage, 'winning_usage_percent': '',
-                'selected_by_threshold': usage >= OTHER_THRESHOLD, 'type': '', 'move_category': '', 'power': '',
-                'accuracy': '', 'priority': '', 'spread': spread,
+                'opponent_rank': rank,
+                'slug': slug,
+                'pokemon_ja': top['name_ja'],
+                'pokemon_en': name_en,
+                'snapshot_jst': manifest['snapshot_jst'],
+                'category': 'stat_points',
+                'component_rank': component_rank,
+                'component_id': spread,
+                'name': '', 'key': '',
+                'usage_percent': usage,
+                'winning_usage_percent': '',
+                'selected_by_threshold': usage >= OTHER_THRESHOLD,
+                'type': '', 'move_category': '', 'power': '', 'accuracy': '', 'priority': '',
+                'spread': spread,
                 'hp_points': points[0], 'attack_points': points[1], 'defense_points': points[2],
                 'sp_atk_points': points[3], 'sp_def_points': points[4], 'speed_points': points[5],
-                'source_file': str(html_path.relative_to(BASE)), 'source_url': top['detail_url'],
+                'source_file': str(html_path.relative_to(BASE)),
+                'source_url': top['detail_url'],
             }
             training_components.append(row)
             all_components.append(row)
         grouped['stat_points'] = training_components
 
+        # Fixed most-frequent build. The page provides independent component usage,
+        # not joint complete builds, so this is method §3.3 B.
         top_four = sorted(move_components, key=lambda row: (-float(row['usage_percent']), int(row['component_rank'])))[:4]
         if len(top_four) != 4:
             raise RuntimeError(f'less than four moves for rank={rank} {slug}')
@@ -157,29 +204,53 @@ def main() -> None:
                 raise RuntimeError(f'no threshold-passing {category} for rank={rank} {slug}')
             selected_parts[category] = sorted(eligible, key=lambda row: (-float(row['usage_percent']), int(row['component_rank'])))[0]
         opponent = {
-            'rank': rank, 'slug': slug, 'pokemon_id': detail.get('pokemon', {}).get('id'),
-            'pokemon_form': detail.get('pokemon', {}).get('form', 0), 'pokemon_key': detail.get('pokemon', {}).get('key'),
-            'pokemon_ja': top['name_ja'], 'pokemon_en': name_en, 'types': types, 'updated_at_en': updated_at,
-            'snapshot_jst': manifest['snapshot_jst'], 'detail_url': top['detail_url'], 'source_file': str(html_path.relative_to(BASE)),
-            'moves': [row['name'] for row in top_four], 'move_usage': [row['usage_percent'] for row in top_four],
+            'rank': rank,
+            'slug': slug,
+            'pokemon_id': detail.get('pokemon', {}).get('id'),
+            'pokemon_form': detail.get('pokemon', {}).get('form', 0),
+            'pokemon_key': detail.get('pokemon', {}).get('key'),
+            'pokemon_ja': top['name_ja'],
+            'pokemon_en': name_en,
+            'types': types,
+            'updated_at_en': updated_at,
+            'snapshot_jst': manifest['snapshot_jst'],
+            'detail_url': top['detail_url'],
+            'source_file': str(html_path.relative_to(BASE)),
+            'moves': [row['name'] for row in top_four],
+            'move_usage': [row['usage_percent'] for row in top_four],
             'eligible_attack_moves': [row['name'] for row in move_components if bool(row['selected_by_threshold']) and row['move_category'] != 'status'],
-            'item': selected_parts['held_item']['name'], 'item_usage_percent': selected_parts['held_item']['usage_percent'],
-            'ability': selected_parts['ability']['name'], 'ability_usage_percent': selected_parts['ability']['usage_percent'],
-            'nature': selected_parts['stat_alignment']['name'], 'nature_usage_percent': selected_parts['stat_alignment']['usage_percent'],
-            'spread': selected_parts['stat_points']['spread'], 'spread_usage_percent': selected_parts['stat_points']['usage_percent'],
-            'hp_points': selected_parts['stat_points']['hp_points'], 'attack_points': selected_parts['stat_points']['attack_points'],
-            'defense_points': selected_parts['stat_points']['defense_points'], 'sp_atk_points': selected_parts['stat_points']['sp_atk_points'],
-            'sp_def_points': selected_parts['stat_points']['sp_def_points'], 'speed_points': selected_parts['stat_points']['speed_points'],
-            'mega_usage': (detail.get('mega') or {}).get('use') or [], 'evidence_type': 'current_most_frequent_completion',
+            'item': selected_parts['held_item']['name'],
+            'item_usage_percent': selected_parts['held_item']['usage_percent'],
+            'ability': selected_parts['ability']['name'],
+            'ability_usage_percent': selected_parts['ability']['usage_percent'],
+            'nature': selected_parts['stat_alignment']['name'],
+            'nature_usage_percent': selected_parts['stat_alignment']['usage_percent'],
+            'spread': selected_parts['stat_points']['spread'],
+            'spread_usage_percent': selected_parts['stat_points']['usage_percent'],
+            'hp_points': selected_parts['stat_points']['hp_points'],
+            'attack_points': selected_parts['stat_points']['attack_points'],
+            'defense_points': selected_parts['stat_points']['defense_points'],
+            'sp_atk_points': selected_parts['stat_points']['sp_atk_points'],
+            'sp_def_points': selected_parts['stat_points']['sp_def_points'],
+            'speed_points': selected_parts['stat_points']['speed_points'],
+            'mega_usage': (detail.get('mega') or {}).get('use') or [],
+            'evidence_type': 'current_most_frequent_completion',
         }
         opponents.append(opponent)
         diagnostics.append({
-            'rank': rank, 'slug': slug, 'move_count': len(move_components),
+            'rank': rank,
+            'slug': slug,
+            'move_count': len(move_components),
             'selected_move_count': sum(bool(row['selected_by_threshold']) for row in move_components),
-            'item_count': len(grouped['held_item']), 'ability_count': len(grouped['ability']),
-            'nature_count': len(grouped['stat_alignment']), 'spread_count': len(grouped['stat_points']),
-            'fixed_moves': ' | '.join(opponent['moves']), 'fixed_item': opponent['item'],
-            'fixed_ability': opponent['ability'], 'fixed_nature': opponent['nature'], 'fixed_spread': opponent['spread'],
+            'item_count': len(grouped['held_item']),
+            'ability_count': len(grouped['ability']),
+            'nature_count': len(grouped['stat_alignment']),
+            'spread_count': len(grouped['stat_points']),
+            'fixed_moves': ' | '.join(opponent['moves']),
+            'fixed_item': opponent['item'],
+            'fixed_ability': opponent['ability'],
+            'fixed_nature': opponent['nature'],
+            'fixed_spread': opponent['spread'],
         })
 
     if len(opponents) != 100 or {row['rank'] for row in opponents} != set(range(1, 101)):
@@ -187,8 +258,13 @@ def main() -> None:
     write_csv(OUT / 'component_evidence.csv', all_components)
     write_csv(OUT / 'parse_diagnostics.csv', diagnostics)
     (OUT / 'opponent_usage.json').write_text(json.dumps({
-        'schema_version': 1, 'snapshot_jst': manifest['snapshot_jst'],
-        'thresholds': {'move_usage_percent': MOVE_USAGE_THRESHOLD, 'winning_move_percent': WIN_MOVE_THRESHOLD, 'item_ability_nature_spread_percent': OTHER_THRESHOLD},
+        'schema_version': 1,
+        'snapshot_jst': manifest['snapshot_jst'],
+        'thresholds': {
+            'move_usage_percent': MOVE_USAGE_THRESHOLD,
+            'winning_move_percent': WIN_MOVE_THRESHOLD,
+            'item_ability_nature_spread_percent': OTHER_THRESHOLD,
+        },
         'opponents': opponents,
     }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({'opponents': len(opponents), 'components': len(all_components), 'snapshot_jst': manifest['snapshot_jst']}, ensure_ascii=False))
