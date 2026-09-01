@@ -1,0 +1,188 @@
+name: Temporary verify NIH DSLD API and cross-match labels
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_verify_dsld_api.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Verify candidate official API routes and search labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/dsld-verified/latest
+          mkdir -p temp-results/dsld-verified/latest/payloads
+          python3 - <<'PY'
+          from __future__ import annotations
+          import hashlib, html, json, pathlib, re, time, urllib.parse, urllib.request, urllib.error
+          from typing import Any
+
+          OUT=pathlib.Path('temp-results/dsld-verified/latest')
+          PAYLOADS=OUT/'payloads'
+          UA='Mozilla/5.0 (compatible; EiyouNote-public-nutrition-research/1.0; +https://github.com/dcftradingcrypt/contena)'
+          HEADERS={'User-Agent':UA,'Accept':'application/json,text/plain,text/html,*/*;q=0.5','Accept-Language':'en-US,en;q=0.9'}
+
+          def sha(data:bytes)->str: return hashlib.sha256(data).hexdigest()
+          def fetch(url:str,max_bytes:int=10_000_000):
+              req=urllib.request.Request(url,headers=HEADERS)
+              with urllib.request.urlopen(req,timeout=45) as r:
+                  body=r.read(max_bytes+1)
+                  if len(body)>max_bytes: raise RuntimeError('payload too large')
+                  return getattr(r,'status',200),r.geturl(),{k.lower():v for k,v in r.headers.items()},body
+
+          routes=set()
+          route_file=pathlib.Path('temp-results/dsld-recon/latest/route_candidates.txt')
+          if route_file.exists():
+              for line in route_file.read_text(encoding='utf-8',errors='replace').splitlines():
+                  line=line.strip()
+                  if not line: continue
+                  if line.startswith('/'):
+                      routes.add(urllib.parse.urljoin('https://dsld.od.nih.gov/',line))
+                  elif line.startswith('http'):
+                      routes.add(line)
+
+          hardcoded=[
+              'https://api.ods.od.nih.gov/dsld/v9/',
+              'https://api.ods.od.nih.gov/dsld/v9/search-filter',
+              'https://api.ods.od.nih.gov/dsld/v9/label',
+              'https://api.ods.od.nih.gov/dsld/v9/labels',
+              'https://api.ods.od.nih.gov/dsld/v9/ingredients',
+              'https://api.ods.od.nih.gov/dsld/swagger/index.html',
+              'https://api.ods.od.nih.gov/dsld/swagger/v1/swagger.json',
+              'https://api.ods.od.nih.gov/dsld/openapi.json',
+              'https://dsld.od.nih.gov/api/search-filter',
+              'https://dsld.od.nih.gov/api/labels',
+          ]
+          routes.update(hardcoded)
+
+          # Add endpoint-like strings found in captured JavaScript/HTML.
+          recon=pathlib.Path('temp-results/dsld-recon/latest')
+          if recon.exists():
+              for p in recon.glob('*.txt'):
+                  text=p.read_text(encoding='utf-8',errors='replace')
+                  for m in re.finditer(r'https?://[^\s"\'<>]+',text):
+                      u=html.unescape(m.group(0).rstrip('),;'))
+                      if any(k in u.lower() for k in ('api.ods','dsld')):
+                          routes.add(u)
+
+          probe_records=[]
+          successful_json=[]
+          for i,url in enumerate(sorted(routes)[:300]):
+              row={'url':url}
+              try:
+                  status,final,headers,body=fetch(url)
+                  ctype=headers.get('content-type','')
+                  row.update({'status':status,'final_url':final,'content_type':ctype,'size_bytes':len(body),'sha256':sha(body)})
+                  text=body.decode('utf-8','replace')
+                  parsed=None
+                  if 'json' in ctype.lower() or text.lstrip().startswith(('{','[')):
+                      try: parsed=json.loads(text)
+                      except Exception: parsed=None
+                  if parsed is not None:
+                      row['json_type']=type(parsed).__name__
+                      row['top_keys']=sorted(parsed.keys())[:100] if isinstance(parsed,dict) else None
+                      name=f'{i:03d}_{hashlib.sha1(final.encode()).hexdigest()[:12]}.json'
+                      (PAYLOADS/name).write_text(json.dumps(parsed,ensure_ascii=False,indent=2)[:5_000_000]+'\n',encoding='utf-8')
+                      row['payload_file']=name
+                      successful_json.append((url,parsed))
+                  else:
+                      row['text_prefix']=text[:500]
+              except Exception as exc:
+                  row['error']=repr(exc)
+              probe_records.append(row)
+              time.sleep(0.3)
+
+          # Search endpoint candidates with multiple conservative query conventions.
+          names=[]
+          ipath=pathlib.Path('temp-results/nutrition-supplement-collection/latest/product_candidates.jsonl')
+          if ipath.exists():
+              for line in ipath.read_text(encoding='utf-8').splitlines():
+                  if not line.strip(): continue
+                  obj=json.loads(line)
+                  name=obj.get('product_name')
+                  brand=obj.get('brand')
+                  if name:
+                      names.append((' '.join(str(x) for x in (brand,name) if x))[:180])
+          # Stable generic terms guarantee endpoint testing even if iHerb collection is unavailable.
+          names.extend(['magnesium','vitamin b6','folic acid','niacinamide','omega 3'])
+          dedup_names=[]; seen=set()
+          for n in names:
+              key=n.casefold()
+              if key not in seen:
+                  seen.add(key); dedup_names.append(n)
+          names=dedup_names[:60]
+
+          bases=set()
+          for row in probe_records:
+              if row.get('status')==200 and ('json' in str(row.get('content_type','')).lower() or row.get('json_type')):
+                  u=row['final_url']
+                  if 'api.ods.od.nih.gov' in u:
+                      bases.add(u.rstrip('/'))
+          bases.update(['https://api.ods.od.nih.gov/dsld/v9/search-filter','https://api.ods.od.nih.gov/dsld/v9/labels'])
+
+          search_records=[]
+          param_variants=('q','query','search','searchTerm','keyword','term')
+          for base in sorted(bases):
+              if not any(k in base.lower() for k in ('search','label')):
+                  continue
+              for param in param_variants:
+                  # Endpoint-shape verification first, then only the first working convention is used broadly.
+                  test_url=base+('?' if '?' not in base else '&')+urllib.parse.urlencode({param:'magnesium','page':1,'pageSize':5})
+                  try:
+                      status,final,headers,body=fetch(test_url)
+                      text=body.decode('utf-8','replace')
+                      parsed=json.loads(text) if text.lstrip().startswith(('{','[')) else None
+                      row={'base':base,'param':param,'test_url':test_url,'status':status,'content_type':headers.get('content-type'),'size_bytes':len(body),'sha256':sha(body),'json_type':type(parsed).__name__ if parsed is not None else None,'top_keys':sorted(parsed.keys())[:100] if isinstance(parsed,dict) else None}
+                      search_records.append(row)
+                      if parsed is not None and len(body)>20:
+                          # Use the verified convention for a bounded cross-match set.
+                          for name in names:
+                              url=base+('?' if '?' not in base else '&')+urllib.parse.urlencode({param:name,'page':1,'pageSize':10})
+                              try:
+                                  s,f,h,b=fetch(url)
+                                  t=b.decode('utf-8','replace')
+                                  obj=json.loads(t) if t.lstrip().startswith(('{','[')) else None
+                                  search_records.append({'base':base,'param':param,'query':name,'url':url,'status':s,'content_type':h.get('content-type'),'size_bytes':len(b),'sha256':sha(b),'json_type':type(obj).__name__ if obj is not None else None,'response':obj})
+                              except Exception as exc:
+                                  search_records.append({'base':base,'param':param,'query':name,'url':url,'error':repr(exc)})
+                              time.sleep(0.3)
+                          break
+                  except Exception as exc:
+                      search_records.append({'base':base,'param':param,'test_url':test_url,'error':repr(exc)})
+                  time.sleep(0.2)
+
+          def write_jsonl(path,rows):
+              with open(path,'w',encoding='utf-8',newline='\n') as f:
+                  for row in rows: f.write(json.dumps(row,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n')
+          write_jsonl(OUT/'probe_records.jsonl',probe_records)
+          write_jsonl(OUT/'search_records.jsonl',search_records)
+          summary={'route_probe_count':len(probe_records),'route_http_200':sum(1 for r in probe_records if r.get('status')==200),'route_json_success':sum(1 for r in probe_records if r.get('json_type')),'search_attempt_rows':len(search_records),'search_json_responses':sum(1 for r in search_records if r.get('json_type')),'cross_match_queries':len(names),'runtime_admission':0}
+          (OUT/'verification_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit results
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/dsld-verified -czf temp-results/dsld-verified/latest.tar.gz latest
+          sha256sum temp-results/dsld-verified/latest.tar.gz > temp-results/dsld-verified/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/dsld-verified
+          git commit -m 'chore: record temporary NIH DSLD route verification' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
