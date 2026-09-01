@@ -1,0 +1,1509 @@
+<!doctype html>
+<html>
+  <head>
+    <title>DSLD Label API</title>
+    <style type="text/css">
+      body {
+      	font-family: Trebuchet MS, sans-serif;
+      	font-size: 15px;
+      	color: #444;
+      	margin-right: 24px;
+      }
+      
+      h1	{
+      	font-size: 25px;
+      }
+      h2	{
+      	font-size: 20px;
+      }
+      h3	{
+      	font-size: 16px;
+      	font-weight: bold;
+      }
+      hr	{
+      	height: 1px;
+      	border: 0;
+      	color: #ddd;
+      	background-color: #ddd;
+      }
+      
+      .app-desc {
+        clear: both;
+        margin-left: 20px;
+      }
+      .param-name {
+        width: 100%;
+      }
+      .license-info {
+        margin-left: 20px;
+      }
+      
+      .license-url {
+        margin-left: 20px;
+      }
+      
+      .model {
+        margin: 0 0 0px 20px;
+      }
+      
+      .method {
+        margin-left: 20px;
+      }
+      
+      .method-notes	{
+      	margin: 10px 0 20px 0;
+      	font-size: 90%;
+      	color: #555;
+      }
+      
+      pre {
+        padding: 10px;
+        margin-bottom: 2px;
+      }
+      
+      .http-method {
+       text-transform: uppercase;
+      }
+      
+      pre.get {
+        background-color: #0f6ab4;
+      }
+      
+      pre.post {
+        background-color: #10a54a;
+      }
+      
+      pre.put {
+        background-color: #c5862b;
+      }
+      
+      pre.delete {
+        background-color: #a41e22;
+      }
+      
+      .huge	{
+      	color: #fff;
+      }
+      
+      pre.example {
+        background-color: #f3f3f3;
+        padding: 10px;
+        border: 1px solid #ddd;
+      }
+      
+      code {
+        white-space: pre;
+      }
+      
+      .nickname {
+        font-weight: bold;
+      }
+      
+      .method-path {
+        font-size: 1.5em;
+        background-color: #0f6ab4;
+      }
+      
+      .up {
+        float:right;
+      }
+      
+      .parameter {
+        width: 500px;
+      }
+      
+      .param {
+        width: 500px;
+        padding: 10px 0 0 20px;
+        font-weight: bold;
+      }
+      
+      .param-desc {
+        width: 700px;
+        padding: 0 0 0 20px;
+        color: #777;
+      }
+      
+      .param-type {
+        font-style: italic;
+      }
+      
+      .param-enum-header {
+      width: 700px;
+      padding: 0 0 0 60px;
+      color: #777;
+      font-weight: bold;
+      }
+      
+      .param-enum {
+      width: 700px;
+      padding: 0 0 0 80px;
+      color: #777;
+      font-style: italic;
+      }
+      
+      .field-label {
+        padding: 0;
+        margin: 0;
+        clear: both;
+      }
+      
+      .field-items	{
+      	padding: 0 0 15px 0;
+      	margin-bottom: 15px;
+      }
+      
+      .return-type {
+        clear: both;
+        padding-bottom: 10px;
+      }
+      
+      .param-header {
+        font-weight: bold;
+      }
+      
+      .method-tags {
+        text-align: right;
+      }
+      
+      .method-tag {
+        background: none repeat scroll 0% 0% #24A600;
+        border-radius: 3px;
+        padding: 2px 10px;
+        margin: 2px;
+        color: #FFF;
+        display: inline-block;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+  <h1>DSLD Label API</h1>
+    <div class="app-desc">API for accessing and searching label data stored in the Dietary Supplement Label Database 
+        (DSLD). When testing through SwaggerHub, please note that the API returns large result sets. In this case it is 
+        recommended to lower the size parameter to 10.</div>
+    <div class="app-desc">More information: <a href="https://dsld.od.nih.gov/api-guide">https://dsld.od.nih.gov/api-guide</a></div>
+    <div class="app-desc">Contact Info: <a href="ODScomments@mail.nih.gov">ODScomments@mail.nih.gov</a></div>
+    <div class="app-desc">Version: 9.4.0</div>
+    <div class="app-desc">BasePath:/dsld/</div>
+    <div class="license-info">CC0 1.0 Universal (CC0 1.0)</div>
+    <div class="license-url">https://creativecommons.org/publicdomain/zero/1.0/</div>
+  <h2>Access</h2>
+
+  <h2><a name="__Methods">Methods</a></h2>
+  [ Jump to <a href="#__Models">Models</a> ]
+
+  <h3>Table of Contents </h3>
+  <div class="method-summary"></div>
+  <h4><a href="#Default">Default</a></h4>
+  <ul>
+  <li><a href="#brandProducts"><code><span class="http-method">get</span> /v9/brand-products</code></a></li>
+  <li><a href="#browseBrands"><code><span class="http-method">get</span> /v9/browse-brands</code></a></li>
+  <li><a href="#browseIngredientGroups"><code><span class="http-method">get</span> /v9/ingredient-groups</code></a></li>
+  <li><a href="#browseProducts"><code><span class="http-method">get</span> /v9/browse-products</code></a></li>
+  <li><a href="#getLabel"><code><span class="http-method">get</span> /v9/label/{id}</code></a></li>
+  <li><a href="#getVersion"><code><span class="http-method">get</span> /version</code></a></li>
+  <li><a href="#searchFilter"><code><span class="http-method">get</span> /v9/search-filter</code></a></li>
+  <li><a href="#searchFilterHistogram"><code><span class="http-method">get</span> /v9/search-filter-histogram</code></a></li>
+  </ul>
+
+  <h1><a name="Default">Default</a></h1>
+  <div class="method"><a name="brandProducts"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/brand-products</code></pre></div>
+    <div class="method-summary">View Products by Brand (<span class="nickname">brandProducts</span>)</div>
+    <div class="method-notes">Allows API consumer to retrieve a paginated list of label info by product name, or a paginated list based on a query term executed against product name for a given brand</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">q (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Brand name for which products are to be listed. </div><div class="param">from (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of start record for pagination, default is 0. default: 0 format: int32</div><div class="param">size (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of records to return, starting at 'from' value (see above). default: 1000 format: int32</div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#brandProductResult">brandProductResult</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+        <pre class="example"><code>{
+      "hits" : [ {
+        "_index" : "_index",
+        "_type" : "_type",
+        "_source" : "{}",
+        "_id" : "_id",
+        "sort" : [ "sort", "sort" ],
+        "_score" : 6.02745618307040320615897144307382404804229736328125
+      }, {
+        "_index" : "_index",
+        "_type" : "_type",
+        "_source" : "{}",
+        "_id" : "_id",
+        "sort" : [ "sort", "sort" ],
+        "_score" : 6.02745618307040320615897144307382404804229736328125
+      } ],
+      "total" : "{}",
+      "max_score" : 0.80082819046101150206595775671303272247314453125
+    }</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    search results matching criteria
+        <a href="#brandProductResult">brandProductResult</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="browseBrands"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/browse-brands</code></pre></div>
+    <div class="method-summary">Browse by Brand Name(s) (<span class="nickname">browseBrands</span>)</div>
+    <div class="method-notes">Allows API consumer to retrieve a paginated list of brands by brand name, or a paginated list based on a query term executed against brand name by keyword or letter</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">method (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies search method. </div><div class="param">q (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Query term; single letter, keyword, or 'Other' for brands beginning with a number. </div><div class="param">from (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of start record for pagination, default is 0. default: 0 format: int32</div><div class="param">size (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of records to return, starting at 'from' value (see above). default: 1000 format: int32</div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#browseBrandResult">browseBrandResult</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+        <pre class="example"><code>{
+            "hits" : [ {
+              "_index" : "_index",
+              "_type" : "_type",
+              "_source" : "{}",
+              "_id" : "_id",
+              "sort" : [ "sort", "sort" ],
+              "_score" : 6.02745618307040320615897144307382404804229736328125
+            }, {
+              "_index" : "_index",
+              "_type" : "_type",
+              "_source" : "{}",
+              "_id" : "_id",
+              "sort" : [ "sort", "sort" ],
+              "_score" : 6.02745618307040320615897144307382404804229736328125
+            } ],
+            "total" : "{}",
+            "max_score" : 0.80082819046101150206595775671303272247314453125
+          }</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    search results matching criteria
+        <a href="#browseBrandResult">browseBrandResult</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="browseIngredientGroups"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/ingredient-groups</code></pre></div>
+    <div class="method-summary">Browse by Ingredient Name(s) (<span class="nickname">browseIngredientGroups</span>)</div>
+    <div class="method-notes">Allows API consumer to retrieve a paginated list of ingredient groups, or a paginated list based on a query term executed against ingredient group names browsing by keyword or letter.</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">term (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Query term, single letter or 'Other' </div><div class="param">method (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies search method. Selecting 'factsheet' matches query term against synonyms for each ingredient group. </div><div class="param">from (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of start record for pagination, default is 0. default: 0 format: int32</div><div class="param">size (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of records to return, starting at 'from' value (see above). default: 1000 format: int32</div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#IngredientGroupResult">IngredientGroupResult</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>{
+      "total": {},
+      "max_score": 5.4117074,
+      "hits": [
+        {
+          "_index": "_index",
+          "_type": "_doc",
+          "_id": "200",
+          "_score": 5.4117074,
+          "_source": {}
+        }
+      ]
+    }</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    search results matching criteria
+        <a href="#IngredientGroupResult">IngredientGroupResult</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="browseProducts"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/browse-products</code></pre></div>
+    <div class="method-summary">Browse by Product Name(s) (<span class="nickname">browseProducts</span>)</div>
+    <div class="method-notes">Allows API consumer to retrieve a paginated list of labels by product name, or a paginated list based on a query term executed against product name by keyword or letter</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">method (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies search method. </div><div class="param">q (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Query term; single letter, keyword, or 'Other' for products beginning with a number. </div><div class="param">size (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of records to return, starting at 'from' value (see below). default: 1000 format: int32</div><div class="param">from (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Number of start record  for pagination, default is 0 default: 0 format: int32</div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#browseProductResult">browseProductResult</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+        <pre class="example">
+          <code>
+            {
+              "hits" : [ {
+                "_index" : "_index",
+                "_type" : "_type",
+                "_source" : "{}",
+                "_id" : "_id",
+                "sort" : [ "sort", "sort" ],
+                "_score" : 6.02745618307040320615897144307382404804229736328125
+              }, {
+                "_index" : "_index",
+                "_type" : "_type",
+                "_source" : "{}",
+                "_id" : "_id",
+                "sort" : [ "sort", "sort" ],
+                "_score" : 6.02745618307040320615897144307382404804229736328125
+              } ],
+              "total" : "{}",
+              "max_score" : 0.80082819046101150206595775671303272247314453125
+            }
+          </code>
+        </pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    search results matching criteria
+        <a href="#browseProductResult">browseProductResult</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="getLabel"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/label/{id}</code></pre></div>
+    <div class="method-summary">Get data for a label (<span class="nickname">getLabel</span>)</div>
+    <div class="method-notes">Retrieves a label by unique DSLD ID.</div>
+
+    <h3 class="field-label">Path parameters</h3>
+    <div class="field-items">
+      <div class="param">id (required)</div>
+
+      <div class="param-desc"><span class="param-type">Path Parameter</span> &mdash; DSLD (label) ID </div>
+    </div>  <!-- field-items -->
+
+
+
+
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#Label">Label</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example">
+      <code>{
+      "src": "01-raw/2022-10-25/data/label_25.json",
+      "id": 25,
+      "nhanesId": "",
+      "bundleName": "",
+      "fullName": "Vitamins For The Hair",
+      "brandName": "Nature's Bounty",
+      "brandIpSymbol": "®",
+      "upcSku": "0 74312 02100 8",
+      "productVersionCode": "Prod. No. 2100 05A B2101",
+      "pdf": "",
+      "thumbnail": "",
+      "servingsPerContainer": null,
+      "hasOuterCarton": false,
+      "percentDvFootnote": "Not Present",
+      "labelRelationships": [],
+      "contacts": [
+          {
+              "contactId": 2212,
+              "text": "Visit us on the Web",
+              "types": [
+                  "Other"
+              ],
+              "contactDetails": {
+                  "src": "01-raw/2022-10-25/data/contact_1.json",
+                  "id": 2212,
+                  "name": "",
+                  "streetAddress": "",
+                  "city": "",
+                  "state": "",
+                  "country": "",
+                  "zipCode": "",
+                  "phoneNumber": "",
+                  "email": "",
+                  "webAddress": "www.NaturesBounty.com"
+              }
+          }
+      ],
+      "netContents": [
+          {
+              "order": 1,
+              "quantity": 65,
+              "unit": "Tablet(s)",
+              "display": "65 Tablet(s)"
+          }
+      ],
+      "physicalState": {
+          "langualCode": "E0155",
+          "langualCodeDescription": "Tablet or Pill"
+      },
+      "servingSizes": [
+          {
+              "order": 1,
+              "minQuantity": 1,
+              "maxQuantity": 1,
+              "minDailyServings": 1,
+              "maxDailyServings": 1,
+              "unit": "Tablet(s)",
+              "inSFB": true
+          }
+      ],
+      "targetGroups": [
+          "Vegetarian",
+          "Adult (18 - 50 Years)"
+      ],
+      "productType": {
+          "langualCode": "A1325",
+          "langualCodeDescription": "Other Combinations"
+      },
+      "statements": [
+          {
+              "type": "FDA Statement of Identity",
+              "notes": "DIETARY SUPPLEMENT"
+          },
+          {
+              "type": "General Statements: All Other Content",
+              "notes": "Provides a combination of nutrients consistently found in healthy hair."
+          },
+          {
+              "type": "Seals/Symbols",
+              "notes": "NATURE'S BOUNTY(R)"
+          },
+          {
+              "type": "Precautions re: All Other",
+              "notes": "Avoid this product if you have Wilson's disease or are allergic to yeast."
+          }
+      ],
+      "claims": [
+          {
+              "langualCode": "P0115",
+              "langualCodeDescription": "All Other"
+          }
+      ],
+      "events": [
+          {
+              "date": "2011-01-01",
+              "type": "Off Market"
+          },
+          {
+              "date": "2012-01-25",
+              "type": "Date entered into DSLD"
+          }
+      ],
+      "userGroups": [
+          {
+              "dailyValueTargetGroupName": "Adults and children 4 or more years of age",
+              "langualCode": "P0250",
+              "langualCodeDescription": "Adults and Children 4 years and above"
+          }
+      ],
+      "ingredientRows": [
+          {
+              "order": 1,
+              "ingredientId": 280871,
+              "description": null,
+              "notes": "Pantothenic Acid (Form: as D-Calcium Pantothenate) ",
+              "quantity": [
+                  {
+                      "servingSizeOrder": 1,
+                      "servingSizeQuantity": 1,
+                      "operator": "=",
+                      "quantity": 100,
+                      "unit": "mg",
+                      "dailyValueTargetGroup": [
+                          {
+                              "name": "Adults and children 4 or more years of age",
+                              "operator": "=",
+                              "percent": 1000,
+                              "footnote": null
+                          }
+                      ],
+                      "servingSizeUnit": "Tablet(s)"
+                  }
+              ],
+              "nestedRows": [],
+              "name": "Pantothenic Acid",
+              "category": "vitamin",
+              "ingredientGroup": "Pantothenic Acid (Vitamin B5)",
+              "uniiCode": "19F5HK2737",
+              "alternateNames": [],
+              "forms": [
+                  {
+                      "order": 1,
+                      "ingredientId": 293281,
+                      "prefix": null,
+                      "percent": null,
+                      "name": "D-Calcium Pantothenate"
+                  }
+              ]
+          },
+          {
+              "order": 2,
+              "ingredientId": 292597,
+              "description": null,
+              "notes": null,
+              "quantity": [
+                  {
+                      "servingSizeOrder": 1,
+                      "servingSizeQuantity": 1,
+                      "operator": "=",
+                      "quantity": 5,
+                      "unit": "mg",
+                      "dailyValueTargetGroup": [
+                          {
+                              "name": "Adults and children 4 or more years of age",
+                              "operator": "<",
+                              "percent": 1,
+                              "footnote": null
+                          }
+                      ],
+                      "servingSizeUnit": "Tablet(s)"
+                  }
+              ],
+              "nestedRows": [],
+              "name": "Sodium",
+              "category": "mineral",
+              "ingredientGroup": "Sodium",
+              "uniiCode": "9NEZ333N27",
+              "alternateNames": [
+                  "Na"
+              ],
+              "forms": []
+          }
+      ],
+      "otheringredients": {
+          "text": null,
+          "ingredients": [
+              {
+                  "order": 1,
+                  "ingredientId": 15302,
+                  "name": "Cellulose",
+                  "category": "fiber",
+                  "ingredientGroup": "Cellulose",
+                  "uniiCode": null,
+                  "alternateNames": [],
+                  "forms": []
+              },
+              {
+                  "order": 2,
+                  "ingredientId": 18961,
+                  "name": "Dicalcium Phosphate",
+                  "category": "mineral",
+                  "ingredientGroup": "Calcium",
+                  "uniiCode": null,
+                  "alternateNames": [],
+                  "forms": []
+              },
+              {
+                  "order": 3,
+                  "ingredientId": 3690,
+                  "name": "Croscarmellose",
+                  "category": "other",
+                  "ingredientGroup": "Croscarmellose",
+                  "uniiCode": null,
+                  "alternateNames": [],
+                  "forms": []
+              }
+          ]
+      },
+      "offMarket": 1,
+      "entryDate": "2012-01-25"
+    }
+  </code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    data for a single label
+        <a href="#Label">Label</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="getVersion"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /version</code></pre></div>
+    <div class="method-summary">API version (<span class="nickname">getVersion</span>)</div>
+    <div class="method-notes">Retrieves API version information</div>
+
+
+
+
+
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#Version">Version</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example">
+      <code>
+        {
+          "title": "DSLD API",
+          "config": "production",
+          "version": "9.2.0",
+          "versionTimeStamp": "November 2023",
+          "esIndexProcessed": "dsldnxt_labels-2023-09-23f and dsldnxt_ing_groups-2023-09-23f"
+        }
+      </code>
+    </pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Version information for API
+        <a href="#Version">Version</a>
+    <h4 class="field-label">500</h4>
+    server error
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="searchFilter"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/search-filter</code></pre></div>
+    <div class="method-summary">Search for Label(s) (<span class="nickname">searchFilter</span>)</div>
+    <div class="method-notes">Allows API consumer to retrieve a set of labels by product name matching a complex combination of search terms and filters</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">q (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Query term. Will search for submitted terms across all label fields. Use quotes to find exact multi token matches. Use * for term-less search. </div><div class="param">sort_by (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies field to sort on. Use _score to sort on &quot;best match&quot;, entryDate to sort by date, and fullName.keyword to sort by product name. </div><div class="param">sort_order (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies sort order. </div><div class="param">status (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Market status. 2 - all, 1 - on market, 0 - off market </div><div class="param">date_start (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Entry date start year. Use 4 digit year YYYY (e.g., 2020). </div><div class="param">date_end (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Entry date end year. Use 4 digit year YYYY (e.g., 2020). </div><div class="param">product_name (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product name(s), one or more separated by comma. Requires product name to contain token submitted in search bar. </div><div class="param">product_type (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product type, one or more codes separated by comma. Codes are a1305 (Amino Acid/Protein), a1306 (Botanical), a1326 (Fiber and Other Nutrients), a1310 (Omega 3 and Other Fatty Acids), a1302 (Vitamin), a1299 (Mineral), a1316 (Single Vitamin and Mineral), a1315 (Multi-Vitamin and Mineral [MVM]), a1317 (Botanicals with Nutrients), a1309 (Non-Nutrient/Non-Botanical), a1325 (Other Combinations). </div><div class="param">ingredient_name (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Ingredient name, one or more separated by comma. Requires ingredient name to contain term submitted in search bar, or the ingredient to be synonymous with term submitted in search bar. </div><div class="param">apply_synonyms (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Include synonyms/alternate names for ingredients? There are two ways to filter for ingredients - with and without synonyms and alternate names. Select ‘Yes’ (default) to include synonyms and alternative names in your search as well as exact matches for your ingredient name(s). Select ‘No’ to only retrieve exact matches of your ingredient name(s). </div><div class="param">ingredient_category (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Ingredient category, one or more categories separated by comma. Categories are amino_acid, animal_part_or_source, blend, botanical, sugars, complex_carbohydrate, enzyme, fat, fatty_acid, fiber, hormone, chemical (Non-nutrient/non-botanical), bacteria, protein, vitamin, mineral, other, tbd. </div><div class="param">brand (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Brand name, one or more separated by comma. Requires brand name to contain term submitted in search bar. </div><div class="param">target_group (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product target group, one ore more codes separated by comma. Codes are p0250 (All Adults and Children Four Years and Above), p0192 (Children 1 to 4 Years), p0266 (Infants), p0253 (Pregnant and Lactating). </div><div class="param">supplement_form (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product supplement form, one ore more codes separated by comma. Codes are e0164 (Bars), e0159 (Capsules), e0161 (Softgel Capsules), e0155 (Tablets and Pills), e0176 (Gummies and Jellies), e0165 (Liquids), e0174 (Lozenges), e0162 (Powders), e0172 (Other; e.g. tea bag), e0177 (Unknown). </div><div class="param">claim_type (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Claim type present on label, one ore more codes separated by comma. Codes are p0065 (Nutrient), p0265 (Structure/Function), p0124 (Approved Health), p0264 (Qualified Health), p0115 (All Other), p0276 (No Claims). </div><div class="param">label_claim (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Dietary claim, one or more separated by comma. Requires dietary claim to contain term submitted in search bar. </div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#SearchResult">SearchResult</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+        <pre class="example"><code>{
+            "hits" : [ {
+              "_index" : "_index",
+              "_type" : "_type",
+              "_source" : "{}",
+              "_id" : "_id",
+              "sort" : [ "sort", "sort" ],
+              "_score" : 6.02745618307040320615897144307382404804229736328125
+            }, {
+              "_index" : "_index",
+              "_type" : "_type",
+              "_source" : "{}",
+              "_id" : "_id",
+              "sort" : [ "sort", "sort" ],
+              "_score" : 6.02745618307040320615897144307382404804229736328125
+            } ],
+            "stats" : {
+				"count": 95500
+				"pct: 0.62
+			}
+          }</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    search results matching criteria
+        <a href="#SearchResult">SearchResult</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="searchFilterHistogram"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /v9/search-filter-histogram</code></pre></div>
+    <div class="method-summary">Histogram of Search Results (<span class="nickname">searchFilterHistogram</span>)</div>
+    <div class="method-notes"><p>Generates histogram of labels over time based on selection criterica.</p>
+<p>Allows API consumer to retrieve a of labels by product name matching a complex combination of search terms and filters</p>
+</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">q (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Query term. Will search for submitted terms across all label fields. Use quotes to find exact multi token matches. Use * for term-less search. </div><div class="param">sort_by (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies field to sort on. Use _score to sort on &quot;best match&quot;, entryDate to sort by date, and fullName.keyword to sort by product name. </div><div class="param">sort_order (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Specifies sort order. </div><div class="param">status (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Market status. 2 - all, 1 - on market, 0 - off market </div><div class="param">product_name (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product name(s), one or more separated by comma. Requires product name to contain token submitted in search bar. </div><div class="param">product_type (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product type, one or more codes separated by comma. Codes are a1305 (Amino Acid/Protein), a1306 (Botanical), a1326 (Fiber and Other Nutrients), a1310 (Omega 3 and Other Fatty Acids), a1302 (Vitamin), a1299 (Mineral), a1316 (Single Vitamin and Mineral), a1315 (Multi-Vitamin and Mineral [MVM]), a1317 (Botanicals with Nutrients), a1309 (Non-Nutrient/Non-Botanical), a1325 (Other Combinations). </div><div class="param">ingredient_name (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Ingredient name, one or more separated by comma. Requires ingredient name to contain term submitted in search bar, or the ingredient to be synonymous with term submitted in search bar. </div><div class="param">apply_synonyms (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Include synonyms/alternate names for ingredients? There are two ways to filter for ingredients - with and without synonyms and alternate names. Select ‘Yes’ (default) to include synonyms and alternative names in your search as well as exact matches for your ingredient name(s). Select ‘No’ to only retrieve exact matches of your ingredient name(s). </div><div class="param">ingredient_category (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Ingredient category, one ore more categories separated by comma. Categories are amino_acid, animal_part_or_source, blend, botanical, sugars, complex_carbohydrate, enzyme, fat, fatty_acid, fiber, hormone, chemical (Non-nutrient/non-botanical), bacteria, protein, vitamin, mineral, other, tbd. </div><div class="param">brand (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Brand name, one or more separated by comma. Requires brand name to contain term submitted in search bar. </div><div class="param">target_group (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product target group, one ore more codes separated by comma. Codes are p0250 (All Adults and Children Four Years and Above), p0192 (Children 1 to 4 Years), p0266 (Infants), p0253 (Pregnant and Lactating). </div><div class="param">supplement_form (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Product supplement form, one ore more codes separated by comma. Codes are e0164 (Bars), e0159 (Capsules), e0161 (Softgel Capsules), e0155 (Tablets and Pills), e0176 (Gummies and Jellies), e0165 (Liquids), e0174 (Lozenges), e0162 (Powders), e0172 (Other; e.g. tea bag), e0177 (Unknown). </div><div class="param">claim_type (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Claim type present on label, one ore more codes separated by comma. Codes are p0065 (Nutrient), p0265 (Structure/Function),p0124 (Approved Health), p0264 (Qualified Health), p0115 (All Other), p0276 (No Claims). </div><div class="param">label_claim (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Dietary claim, one or more separated by comma. Requires dietary claim to contain term submitted in search bar. </div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#SearchHistogramResult">SearchHistogramResult</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>[
+      {
+          "key_as_string": "2016-01-01T00:00:00.000Z",
+          "key": 1451606400000,
+          "doc_count": 2485
+      },
+      {
+          "key_as_string": "2017-01-01T00:00:00.000Z",
+          "key": 1483228800000,
+          "doc_count": 2312
+      },
+      {
+          "key_as_string": "2018-01-01T00:00:00.000Z",
+          "key": 1514764800000,
+          "doc_count": 1828
+      },
+      {
+          "key_as_string": "2019-01-01T00:00:00.000Z",
+          "key": 1546300800000,
+          "doc_count": 3440
+      },
+      {
+          "key_as_string": "2020-01-01T00:00:00.000Z",
+          "key": 1577836800000,
+          "doc_count": 6385
+      }
+  ]</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="header">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    search results matching criteria
+        <a href="#SearchHistogramResult">SearchHistogramResult</a>
+    <h4 class="field-label">500</h4>
+    bad input parameter
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+
+  <h2><a name="__Models">Models</a></h2>
+  [ Jump to <a href="#__Methods">Methods</a> ]
+
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#Contact"><code>Contact</code> - </a></li>
+    <li><a href="#Contact_contactDetails"><code>Contact_contactDetails</code> - </a></li>
+    <li><a href="#HistogramEntry"><code>HistogramEntry</code> - </a></li>
+    <li><a href="#IngredientGroupDoc"><code>IngredientGroupDoc</code> - </a></li>
+    <li><a href="#IngredientGroupDoc_factsheets"><code>IngredientGroupDoc_factsheets</code> - </a></li>
+    <li><a href="#IngredientGroupDoc_nutrientInfo"><code>IngredientGroupDoc_nutrientInfo</code> - </a></li>
+    <li><a href="#IngredientGroupHit"><code>IngredientGroupHit</code> - </a></li>
+    <li><a href="#IngredientGroupResult"><code>IngredientGroupResult</code> - </a></li>
+    <li><a href="#Label"><code>Label</code> - </a></li>
+    <li><a href="#Label_dailyValueTargetGroup"><code>Label_dailyValueTargetGroup</code> - </a></li>
+    <li><a href="#Label_ingredientRows"><code>Label_ingredientRows</code> - </a></li>
+    <li><a href="#Label_nestedRows"><code>Label_nestedRows</code> - </a></li>
+    <li><a href="#Label_otheringredients"><code>Label_otheringredients</code> - </a></li>
+    <li><a href="#Label_otheringredients_ingredients"><code>Label_otheringredients_ingredients</code> - </a></li>
+    <li><a href="#Label_quantity"><code>Label_quantity</code> - </a></li>
+    <li><a href="#Label_quantity_1"><code>Label_quantity_1</code> - </a></li>
+    <li><a href="#SearchHistogramResult"><code>SearchHistogramResult</code> - </a></li>
+    <li><a href="#SearchResult"><code>SearchResult</code> - </a></li>
+    <li><a href="#SearchResultHit"><code>SearchResultHit</code> - </a></li>
+    <li><a href="#Stats"><code>Stats</code> - </a></li>
+    <li><a href="#TruncatedBrowseBrandLabel"><code>TruncatedBrowseBrandLabel</code> - </a></li>
+    <li><a href="#Version"><code>Version</code> - </a></li>
+    <li><a href="#brandProductHit"><code>brandProductHit</code> - </a></li>
+    <li><a href="#brandProductResult"><code>brandProductResult</code> - </a></li>
+    <li><a href="#browseBrandHit"><code>browseBrandHit</code> - </a></li>
+    <li><a href="#browseBrandResult"><code>browseBrandResult</code> - </a></li>
+    <li><a href="#browseProductHit"><code>browseProductHit</code> - </a></li>
+    <li><a href="#browseProductResult"><code>browseProductResult</code> - </a></li>
+    <li><a href="#claims"><code>claims</code> - </a></li>
+    <li><a href="#events"><code>events</code> - </a></li>
+    <li><a href="#forms"><code>forms</code> - </a></li>
+    <li><a href="#labelRelationship"><code>labelRelationship</code> - </a></li>
+    <li><a href="#labelStatements"><code>labelStatements</code> - </a></li>
+    <li><a href="#netContents"><code>netContents</code> - </a></li>
+    <li><a href="#physicalState"><code>physicalState</code> - </a></li>
+    <li><a href="#productType"><code>productType</code> - </a></li>
+    <li><a href="#searchTotal"><code>searchTotal</code> - </a></li>
+    <li><a href="#servingSize"><code>servingSize</code> - </a></li>
+    <li><a href="#truncatedBrowseProductLabel"><code>truncatedBrowseProductLabel</code> - </a></li>
+    <li><a href="#truncatedServingSize"><code>truncatedServingSize</code> - </a></li>
+    <li><a href="#userGroups"><code>userGroups</code> - </a></li>
+  </ol>
+
+  <div class="model">
+    <h3><a name="Contact"><code>Contact</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">contactId (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">text (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">types (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">array[Object]</a></span>  </div>
+<div class="param">contactDetails (optional)</div><div class="param-desc"><span class="param-type"><a href="#Contact_contactDetails">Contact_contactDetails</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Contact_contactDetails"><code>Contact_contactDetails</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">src (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">id (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">streetAddress (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">city (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">state (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">country (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">zipCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">phoneNumber (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">email (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">webAddress (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="HistogramEntry"><code>HistogramEntry</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">key_as_string (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> date labels were added </div>
+<div class="param">key (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> elasticsearch encoding of date labels were added </div>
+<div class="param">doc_count (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> label count </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="IngredientGroupDoc"><code>IngredientGroupDoc</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">groupId (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">groupName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">category (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">array[String]</a></span>  </div>
+<div class="param">synonyms (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">array[String]</a></span>  </div>
+<div class="param">factsheets (optional)</div><div class="param-desc"><span class="param-type"><a href="#IngredientGroupDoc_factsheets">array[IngredientGroupDoc_factsheets]</a></span>  </div>
+<div class="param">nutrientInfo (optional)</div><div class="param-desc"><span class="param-type"><a href="#IngredientGroupDoc_nutrientInfo">array[IngredientGroupDoc_nutrientInfo]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="IngredientGroupDoc_factsheets"><code>IngredientGroupDoc_factsheets</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">link (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="IngredientGroupDoc_nutrientInfo"><code>IngredientGroupDoc_nutrientInfo</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">cas (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">identity (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">nutrient (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">iupacNomenclature (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="IngredientGroupHit"><code>IngredientGroupHit</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">_index (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> Elasticsearch index used. </div>
+<div class="param">_type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> expect '_doc' </div>
+<div class="param">_id (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> unique id, see dsldId </div>
+<div class="param">_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> match score or null </div>
+<div class="param">_source (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="IngredientGroupResult"><code>IngredientGroupResult</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">total (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+<div class="param">max_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> maximum elasticsearch match score </div>
+<div class="param">hits (optional)</div><div class="param-desc"><span class="param-type"><a href="#IngredientGroupHit">array[IngredientGroupHit]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label"><code>Label</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">src (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">id </div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">nhanesId (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">bundleName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">fullName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">brandName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">brandIpSymbol (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">upcSku (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">productVersionCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">pdf (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">thumbnail (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">servingsPerContainer (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">hasOuterCarton (optional)</div><div class="param-desc"><span class="param-type"><a href="#boolean">Boolean</a></span>  </div>
+<div class="param">percentDvFootnote (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">labelRelationships (optional)</div><div class="param-desc"><span class="param-type"><a href="#labelRelationship">array[labelRelationship]</a></span>  </div>
+<div class="param">contacts (optional)</div><div class="param-desc"><span class="param-type"><a href="#Contact">array[Contact]</a></span>  </div>
+<div class="param">netContents (optional)</div><div class="param-desc"><span class="param-type"><a href="#netContents">array[netContents]</a></span>  </div>
+<div class="param">physicalState (optional)</div><div class="param-desc"><span class="param-type"><a href="#physicalState">physicalState</a></span>  </div>
+<div class="param">servingSizes (optional)</div><div class="param-desc"><span class="param-type"><a href="#servingSize">array[servingSize]</a></span>  </div>
+<div class="param">targetGroups (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">array[Object]</a></span>  </div>
+          <div class="param-desc"><span class="param-type">example: "Adult (18 - 50 Years)"</span></div>
+<div class="param">productType (optional)</div><div class="param-desc"><span class="param-type"><a href="#productType">productType</a></span>  </div>
+<div class="param">statements (optional)</div><div class="param-desc"><span class="param-type"><a href="#labelStatements">array[labelStatements]</a></span>  </div>
+<div class="param">claims (optional)</div><div class="param-desc"><span class="param-type"><a href="#claims">array[claims]</a></span>  </div>
+<div class="param">events (optional)</div><div class="param-desc"><span class="param-type"><a href="#events">array[events]</a></span>  </div>
+<div class="param">userGroups (optional)</div><div class="param-desc"><span class="param-type"><a href="#userGroups">array[userGroups]</a></span>  </div>
+<div class="param">ingredientRows (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_ingredientRows">array[Label_ingredientRows]</a></span>  </div>
+<div class="param">otheringredients (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_otheringredients">Label_otheringredients</a></span>  </div>
+<div class="param">offMarket (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">entryDate (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_dailyValueTargetGroup"><code>Label_dailyValueTargetGroup</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">footnote (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">operator (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">percent (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_ingredientRows"><code>Label_ingredientRows</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">ingredientId (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">description (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">notes (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">quantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_quantity">array[Label_quantity]</a></span>  </div>
+<div class="param">nestedRows (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_nestedRows">array[Label_nestedRows]</a></span>  </div>
+<div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">category (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">ingredientGroup (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">uniiCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">alternateNames (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">array[Object]</a></span>  </div>
+<div class="param">forms (optional)</div><div class="param-desc"><span class="param-type"><a href="#forms">array[forms]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_nestedRows"><code>Label_nestedRows</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">quantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_quantity_1">array[Label_quantity_1]</a></span>  </div>
+<div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">ingredientId (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">description (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">notes (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_otheringredients"><code>Label_otheringredients</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">text (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">ingredients (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_otheringredients_ingredients">array[Label_otheringredients_ingredients]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_otheringredients_ingredients"><code>Label_otheringredients_ingredients</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">ingredientId (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">category (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">ingredientGroup (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">uniiCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">alternateNames (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">array[Object]</a></span>  </div>
+<div class="param">forms (optional)</div><div class="param-desc"><span class="param-type"><a href="#forms">array[forms]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_quantity"><code>Label_quantity</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">servingSizeOrder (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">servingSizeQuantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">operator (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">quantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">unit (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">dailyValueTargetGroup (optional)</div><div class="param-desc"><span class="param-type"><a href="#Label_dailyValueTargetGroup">array[Label_dailyValueTargetGroup]</a></span>  </div>
+<div class="param">servingSizeUnit (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Label_quantity_1"><code>Label_quantity_1</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">servingSizeQuantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">operator (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">quantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">unit (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">servingSizeOrder (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="SearchHistogramResult"><code>SearchHistogramResult</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+          </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="SearchResult"><code>SearchResult</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">hits (optional)</div><div class="param-desc"><span class="param-type"><a href="#SearchResultHit">array[SearchResultHit]</a></span>  </div>
+<div class="param">stats (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="SearchResultHit"><code>SearchResultHit</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">_index (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> Elasticsearch index used. </div>
+<div class="param">_type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> expect '_doc' </div>
+<div class="param">_id (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> unique id, see dsldId </div>
+<div class="param">_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> match score or null </div>
+<div class="param">_source (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Stats"><code>Stats</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">count (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">pct (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="TruncatedBrowseBrandLabel"><code>TruncatedBrowseBrandLabel</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">brand (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="Version"><code>Version</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">title (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+      <div class="param">config (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+      <div class="param">version (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+      <div class="param">versionTimeStamp (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+      <div class="param">esIndexProcessed (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="brandProductHit"><code>brandProductHit</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">_index (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> Elasticsearch index used. </div>
+<div class="param">_type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> expect '_doc' </div>
+<div class="param">_id (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> unique id, see label id </div>
+<div class="param">_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> match score or null </div>
+<div class="param">_source (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="brandProductResult"><code>brandProductResult</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">total (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+<div class="param">max_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> maximum elasticsearch match score </div>
+<div class="param">hits (optional)</div><div class="param-desc"><span class="param-type"><a href="#brandProductHit">array[brandProductHit]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="browseBrandHit"><code>browseBrandHit</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">_index (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> Elasticsearch index used. </div>
+<div class="param">_type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> expect '_doc' </div>
+<div class="param">_id (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> unique id, see dsldId </div>
+<div class="param">_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> match score or null </div>
+<div class="param">_source (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+<div class="param">sort (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">array[String]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="browseBrandResult"><code>browseBrandResult</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">total (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+<div class="param">max_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> maximum elasticsearch match score </div>
+<div class="param">hits (optional)</div><div class="param-desc"><span class="param-type"><a href="#browseBrandHit">array[browseBrandHit]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="browseProductHit"><code>browseProductHit</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">_index (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> Elasticsearch index used. </div>
+<div class="param">_type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> expect '_doc' </div>
+<div class="param">_id (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> unique id, see dsldId </div>
+<div class="param">_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> match score or null </div>
+<div class="param">_source (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+<div class="param">sort (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">array[String]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="browseProductResult"><code>browseProductResult</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">total (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span>  </div>
+<div class="param">max_score (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span> maximum elasticsearch match score </div>
+<div class="param">hits (optional)</div><div class="param-desc"><span class="param-type"><a href="#browseProductHit">array[browseProductHit]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="claims"><code>claims</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">langualCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">langualCodeDescription (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="events"><code>events</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">date (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="forms"><code>forms</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">ingredientId (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">prefix (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">percent (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="labelRelationship"><code>labelRelationship</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">labelId (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="labelStatements"><code>labelStatements</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">type (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">notes (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="netContents"><code>netContents</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">quantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">unit (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">display (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="physicalState"><code>physicalState</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">langualCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">langualCodeDescription (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="productType"><code>productType</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">langualCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">langualCodeDescription (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="searchTotal"><code>searchTotal</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">value (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span>  </div>
+<div class="param">relation (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> relation in the response will indicate if the value returned is accurate (&quot;eq&quot;) or a lower bound of the total (&quot;gte&quot;) </div>
+        <div class="param-enum-header">Enum:</div>
+        <div class="param-enum">gte</div><div class="param-enum">eq</div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="servingSize"><code>servingSize</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">minQuantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">maxQuantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">minDailyServings (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">maxDailyServings (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">unit (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">notes (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">inSFB (optional)</div><div class="param-desc"><span class="param-type"><a href="#boolean">Boolean</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="truncatedBrowseProductLabel"><code>truncatedBrowseProductLabel</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">servingSizes (optional)</div><div class="param-desc"><span class="param-type"><a href="#truncatedServingSize">array[truncatedServingSize]</a></span>  </div>
+<div class="param">brandName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">physicalState (optional)</div><div class="param-desc"><span class="param-type"><a href="#physicalState">physicalState</a></span>  </div>
+<div class="param">fullName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">upcSku (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">netContents (optional)</div><div class="param-desc"><span class="param-type"><a href="#netContents">array[netContents]</a></span>  </div>
+<div class="param">events (optional)</div><div class="param-desc"><span class="param-type"><a href="#events">array[events]</a></span>  </div>
+<div class="param">sort (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">array[String]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="truncatedServingSize"><code>truncatedServingSize</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">order (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">minQuantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">maxQuantity (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">minDailyServings (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">maxDailyServings (optional)</div><div class="param-desc"><span class="param-type"><a href="#number">BigDecimal</a></span>  </div>
+<div class="param">unit (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">inSFB (optional)</div><div class="param-desc"><span class="param-type"><a href="#boolean">Boolean</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3><a name="userGroups"><code>userGroups</code> - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'></div>
+    <div class="field-items">
+      <div class="param">dailyValueTargetGroupName (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">langualCode (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+<div class="param">langualCodeDescription (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  </body>
+</html>
