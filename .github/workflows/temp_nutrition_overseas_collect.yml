@@ -1,0 +1,206 @@
+name: Temporary nutrition overseas collection ferry
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-ferry-20260902
+    paths:
+      - .github/workflows/temp_nutrition_overseas_collect.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-ferry-20260902
+
+      - name: Collect and normalize public supplement sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf nutrition_ferry_output .nutrition_raw
+          mkdir -p nutrition_ferry_output .nutrition_raw/pages
+          python3 - <<'PY'
+          from __future__ import annotations
+          import collections, hashlib, html, json, pathlib, re, time, urllib.request
+          import xml.etree.ElementTree as ET
+          from html.parser import HTMLParser
+          from urllib.parse import urlparse
+
+          OUT=pathlib.Path('nutrition_ferry_output')
+          RAW=pathlib.Path('.nutrition_raw')
+          PAGES=RAW/'pages'
+          UA='Mozilla/5.0 (compatible; NutritionReferenceResearch/1.0)'
+          SITEMAPS=[
+            'https://www.nowfoods.com/sitemap.xml',
+            'https://www.lifeextension.com/sitemap.xml',
+            'https://www.seekinghealth.com/sitemap.xml',
+            'https://www.thorne.com/sitemap.xml',
+            'https://www.solgar.com/sitemap.xml',
+            'https://nutricost.com/sitemap.xml',
+            'https://www.naturesway.com/sitemap.xml',
+            'https://www.jarrow.com/sitemap.xml',
+            'https://www.doctorsbest.com/sitemap.xml',
+            'https://www.gardenoflife.com/sitemap.xml',
+          ]
+          TARGETS={
+            'vitamin_a_total':['vitamin-a','vitamin_a'],
+            'preformed_vitamin_a':['retinol','retinyl'],
+            'beta_carotene':['beta-carotene','beta_carotene','carotene'],
+            'vitamin_d':['vitamin-d','vitamin_d','cholecalciferol','ergocalciferol'],
+            'vitamin_e':['vitamin-e','vitamin_e','tocopherol','tocotrienol'],
+            'vitamin_k':['vitamin-k','vitamin_k','menaquinone','mk-7','mk7','phylloquinone'],
+            'thiamin':['thiamin','thiamine','vitamin-b1','vitamin_b1'],
+            'riboflavin':['riboflavin','vitamin-b2','vitamin_b2'],
+            'niacin_total':['niacin'],
+            'nicotinic_acid':['nicotinic-acid','nicotinic_acid'],
+            'nicotinamide':['niacinamide','nicotinamide'],
+            'inositol_hexanicotinate':['inositol-hexanicotinate','inositol_hexanicotinate','no-flush-niacin'],
+            'vitamin_b6':['vitamin-b6','vitamin_b6','pyridox','p-5-p','p5p'],
+            'folic_acid':['folic-acid','folic_acid'],
+            'methylfolate':['methylfolate','methyl-folate','5-mthf','5mthf'],
+            'folinic_acid':['folinic-acid','folinic_acid','calcium-folinate'],
+            'vitamin_b12':['vitamin-b12','vitamin_b12','cobalamin'],
+            'biotin':['biotin'],
+            'pantothenic_acid':['pantothenic','vitamin-b5','vitamin_b5'],
+            'choline':['choline'],
+            'vitamin_c':['vitamin-c','vitamin_c','ascorb'],
+            'calcium':['calcium'],
+            'iron':['iron','ferrous','ferric'],
+            'magnesium':['magnesium'],
+            'zinc':['zinc'],
+            'copper':['copper'],
+            'manganese':['manganese'],
+            'iodine':['iodine','iodide','kelp'],
+            'selenium':['selenium'],
+            'chromium':['chromium'],
+            'molybdenum':['molybdenum'],
+            'phosphorus':['phosphorus','phosphate'],
+            'potassium':['potassium'],
+            'boron':['boron'],
+            'epa':['eicosapentaenoic','epa'],
+            'dha':['docosahexaenoic','dha'],
+            'omega3_total':['omega-3','omega3','fish-oil','fish_oil'],
+            'multinutrient':['multivitamin','multi-vitamin','multimineral','multi-mineral','two-per-day','b-complex'],
+          }
+          PATTERNS=[
+            ('vitamin_a_total',r'\bvitamin\s+a\b'),('preformed_vitamin_a',r'\b(?:retinol|retinyl\s+(?:acetate|palmitate))\b'),('beta_carotene',r'\bbeta[- ]carotene\b'),
+            ('vitamin_d',r'\bvitamin\s+d(?:2|3)?\b|\b(?:cholecalciferol|ergocalciferol)\b'),('vitamin_e',r'\bvitamin\s+e\b|\b(?:alpha[- ]?)?tocopherol\b'),('vitamin_k',r'\bvitamin\s+k(?:1|2)?\b|\b(?:menaquinone|phylloquinone|mk[- ]?7|mk[- ]?4)\b'),
+            ('thiamin',r'\bthiam(?:in|ine)\b|\bvitamin\s+b[- ]?1\b'),('riboflavin',r'\briboflavin\b|\bvitamin\s+b[- ]?2\b'),('niacin_total',r'\bniacin\b'),('nicotinic_acid',r'\bnicotinic\s+acid\b'),('nicotinamide',r'\b(?:nicotinamide|niacinamide)\b'),('inositol_hexanicotinate',r'\binositol\s+hexanicotinate\b'),
+            ('vitamin_b6',r'\bvitamin\s+b[- ]?6\b|\bpyridox(?:ine|al|amine)\b|\bp[- ]?5[- ]?p\b'),('folate_total',r'\bfolate\b'),('folic_acid',r'\bfolic\s+acid\b'),('methylfolate',r'\b(?:methylfolate|5[- ]?mthf|methyltetrahydrofolate)\b'),('folinic_acid',r'\bfolinic\s+acid\b|\bcalcium\s+folinate\b'),
+            ('vitamin_b12',r'\bvitamin\s+b[- ]?12\b|\b(?:methyl|hydroxo|cyano|adeno)?cobalamin\b'),('biotin',r'\bbiotin\b'),('pantothenic_acid',r'\bpantothenic\s+acid\b|\bvitamin\s+b[- ]?5\b'),('choline',r'\bcholine\b'),('vitamin_c',r'\bvitamin\s+c\b|\bascorb(?:ic|ate)\b'),
+            ('calcium',r'\bcalcium\b'),('iron',r'\biron\b|\bferrous\b|\bferric\b'),('magnesium',r'\bmagnesium\b'),('zinc',r'\bzinc\b'),('copper',r'\bcopper\b'),('manganese',r'\bmanganese\b'),('iodine',r'\biodine\b|\biodide\b'),('selenium',r'\bselenium\b'),('chromium',r'\bchromium\b'),('molybdenum',r'\bmolybdenum\b'),('phosphorus',r'\bphosphorus\b'),('potassium',r'\bpotassium\b'),('boron',r'\bboron\b'),('epa',r'\b(?:epa|eicosapentaenoic\s+acid)\b'),('dha',r'\b(?:dha|docosahexaenoic\s+acid)\b'),('dpa',r'\b(?:dpa|docosapentaenoic\s+acid)\b')
+          ]
+          AMOUNT_RE=re.compile(r'(?<![A-Za-z0-9])(?:<\s*)?\d+(?:[.,]\d+)?\s*(?:mcg|µg|ug|mg|g|iu|i\.u\.|mg\s*ne|mcg\s*rae|mcg\s*dfe)\b',re.I)
+          SERVING_RE=re.compile(r'\bserving\s+size\b\s*[:\-]?\s*(.{1,120}?)(?=\bservings?\s+per\s+container\b|\bamount\s+per\s+serving\b|\bcalories\b|\b%\s*daily\s+value\b|$)',re.I)
+
+          class Parser(HTMLParser):
+              def __init__(self): super().__init__(); self.parts=[]; self.title=[]; self.in_title=False; self.canonical=''
+              def handle_starttag(self,tag,attrs):
+                  d=dict(attrs)
+                  if tag.lower()=='title': self.in_title=True
+                  if tag.lower()=='link' and 'canonical' in str(d.get('rel','')).lower(): self.canonical=d.get('href','')
+              def handle_endtag(self,tag):
+                  if tag.lower()=='title': self.in_title=False
+              def handle_data(self,data):
+                  s=re.sub(r'\s+',' ',html.unescape(data or '')).strip()
+                  if s:
+                      self.parts.append(s)
+                      if self.in_title:self.title.append(s)
+
+          def fetch(url,timeout=60):
+              last=None
+              for attempt in range(1,4):
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'})
+                      with urllib.request.urlopen(req,timeout=timeout) as r:
+                          return getattr(r,'status',200),r.headers.get('Content-Type',''),r.geturl(),r.read()
+                  except Exception as exc:
+                      last=repr(exc); time.sleep(attempt*2)
+              raise RuntimeError(last)
+
+          queues=list(SITEMAPS); seen=set(); discovered=set(); sitemap_log=[]
+          while queues and len(seen)<240:
+              url=queues.pop(0)
+              if url in seen:continue
+              seen.add(url)
+              try:
+                  st,ct,final,body=fetch(url,45); root=ET.fromstring(body)
+                  locs=[(x.text or '').strip() for x in root.iter() if x.tag.endswith('loc') and x.text]
+                  kind='index' if root.tag.endswith('sitemapindex') else 'urlset'
+                  if kind=='index':
+                      for loc in locs:
+                          if loc not in seen and len(queues)<600:queues.append(loc)
+                  else:discovered.update(locs)
+                  sitemap_log.append({'requested_url':url,'final_url':final,'status':st,'content_type':ct,'bytes':len(body),'kind':kind,'loc_count':len(locs),'error':None})
+              except Exception as exc:sitemap_log.append({'requested_url':url,'final_url':None,'status':None,'content_type':None,'bytes':0,'kind':'error','loc_count':0,'error':repr(exc)})
+
+          candidates=[]
+          for url in sorted(discovered):
+              low=url.lower()
+              if any(x in low for x in ('/blog/','/blogs/','/article/','/articles/','/category/','/collections/','/pages/','/search','/account','/cart','/policies/')):continue
+              targets=[k for k,v in TARGETS.items() if any(term in low for term in v)]
+              if not targets:continue
+              productish=any(x in low for x in ('/products/','/product/','/p/'))
+              candidates.append({'url':url,'host':urlparse(url).netloc.lower(),'url_targets':targets,'productish':productish,'score':len(targets)*10+(30 if productish else 0)})
+
+          selected=[]; tc=collections.Counter(); hc=collections.Counter()
+          for row in sorted(candidates,key=lambda x:(-x['score'],x['url'])):
+              useful=[x for x in row['url_targets'] if tc[x]<4]
+              if not useful or hc[row['host']]>=34:continue
+              item=dict(row);item['selected_targets']=useful;selected.append(item);hc[row['host']]+=1
+              for x in useful:tc[x]+=1
+              if len(selected)>=175:break
+
+          captures=[]; evidence=[]; coverage=collections.defaultdict(lambda:{'pages':set(),'quant':set(),'hosts':set(),'amounts':set(),'examples':[]})
+          for i,row in enumerate(selected,1):
+              try:
+                  st,ct,final,body=fetch(row['url'],60); digest=hashlib.sha256(body).hexdigest(); filename=f'{i:03d}_{digest[:18]}.html';(PAGES/filename).write_bytes(body)
+                  raw=body.decode('utf-8','replace');parser=Parser()
+                  try:parser.feed(raw)
+                  except Exception:pass
+                  text=re.sub(r'\s+',' ',' '.join(parser.parts)).strip();low=text.lower();title=' '.join(parser.title).strip();sf=low.find('supplement facts');excerpt=text[max(0,sf-200):sf+16000] if sf>=0 else text[:16000];serving=[m.group(1).strip() for m in SERVING_RE.finditer(excerpt)]
+                  entities=[]
+                  for entity,pattern in PATTERNS:
+                      matches=list(re.finditer(pattern,excerpt,re.I))
+                      if not matches:continue
+                      amounts=[];contexts=[]
+                      for m in matches[:10]:
+                          ctx=excerpt[max(0,m.start()-120):min(len(excerpt),m.end()+330)];a=AMOUNT_RE.findall(ctx);amounts.extend(a[:8]);contexts.append(ctx)
+                      e={'page_file':filename,'source_url':row['url'],'final_url':final,'source_sha256':digest,'title':title,'entity_id':entity,'amount_candidates':amounts[:30],'serving_size_candidates':serving[:10],'contexts':contexts[:6],'has_quantitative_evidence':bool(amounts)};evidence.append(e);entities.append({'entity_id':entity,'has_quantitative_evidence':bool(amounts),'amount_candidates':amounts[:10]});coverage[entity]['pages'].add(filename);coverage[entity]['hosts'].add(row['host']);coverage[entity]['amounts'].update(amounts)
+                      if amounts:coverage[entity]['quant'].add(filename)
+                      if len(coverage[entity]['examples'])<6:coverage[entity]['examples'].append({'url':row['url'],'title':title,'amount_candidates':amounts[:8]})
+                  captures.append({**row,'http_status':st,'content_type':ct,'final_url':final,'filename':filename,'size_bytes':len(body),'sha256':digest,'title':title,'canonical_url':parser.canonical,'has_supplement_facts':sf>=0,'serving_size_candidates':serving[:10],'blocked_page':bool(re.search(r'access denied|captcha|verify you are human|cloudflare ray id',text,re.I)),'evidence_entities':entities,'error':None})
+              except Exception as exc:captures.append({**row,'http_status':None,'content_type':None,'final_url':None,'filename':None,'size_bytes':0,'sha256':None,'title':None,'canonical_url':None,'has_supplement_facts':False,'serving_size_candidates':[],'blocked_page':False,'evidence_entities':[],'error':repr(exc)})
+              time.sleep(.6)
+
+          coverage_rows=[]
+          for entity,_ in PATTERNS:
+              d=coverage[entity]
+              coverage_rows.append({'entity_id':entity,'evidence_pages':len(d['pages']),'quantitative_evidence_pages':len(d['quant']),'hosts':sorted(d['hosts']),'amount_candidates':sorted(d['amounts'])[:120],'examples':d['examples'],'coverage_status':'quantitative_evidence_found' if d['quant'] else ('name_only_evidence' if d['pages'] else 'no_evidence')})
+          coverage_rows.sort(key=lambda x:x['entity_id'])
+          def jsonl(path,rows):path.write_text(''.join(json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n' for x in rows),encoding='utf-8')
+          jsonl(OUT/'sitemap_log.jsonl',sitemap_log);jsonl(OUT/'discovered_candidates.jsonl',candidates);jsonl(OUT/'capture_manifest.jsonl',captures);jsonl(OUT/'component_evidence.jsonl',evidence);jsonl(OUT/'entity_coverage.jsonl',coverage_rows);jsonl(OUT/'gap_queue.jsonl',[x for x in coverage_rows if x['quantitative_evidence_pages']==0])
+          summary={'github_run_id':'${{ github.run_id }}','sitemaps_attempted':len(sitemap_log),'sitemaps_ok':sum(x['error'] is None for x in sitemap_log),'urls_discovered':len(discovered),'candidate_urls':len(candidates),'selected_pages':len(selected),'pages_fetched':sum(x['http_status']==200 for x in captures),'pages_with_supplement_facts':sum(x['has_supplement_facts'] for x in captures),'blocked_pages':sum(x['blocked_page'] for x in captures),'fetch_errors':sum(x['error'] is not None for x in captures),'component_evidence_rows':len(evidence),'entities_with_quantitative_evidence':sum(x['quantitative_evidence_pages']>0 for x in coverage_rows),'entities_without_quantitative_evidence':sum(x['quantitative_evidence_pages']==0 for x in coverage_rows),'runtime_admission':0,'codex_handoff_ready':False}
+          (OUT/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          (OUT/'report.md').write_text('# Overseas supplement source collection\n\n'+''.join(f'- {k}: **{v}**\n' for k,v in summary.items())+'\nNo row is runtime-admitted.\n',encoding='utf-8')
+          (OUT/'SHA256SUMS').write_text(''.join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(OUT).as_posix()}\n" for p in sorted(OUT.rglob('*')) if p.is_file()),encoding='utf-8')
+          PY
+          tar -C .nutrition_raw -czf nutrition_ferry_output/overseas_supplement_sources_20260902.tar.gz .
+          sha256sum nutrition_ferry_output/overseas_supplement_sources_20260902.tar.gz > nutrition_ferry_output/overseas_supplement_sources_20260902.tar.gz.sha256
+
+      - name: Commit ferry output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add nutrition_ferry_output
+          git commit -m "data: add temporary overseas supplement source corpus"
+          git push origin HEAD:temp/nutrition-data-ferry-20260902
