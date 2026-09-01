@@ -1,0 +1,14 @@
+{
+  "target_form_count": 42,
+  "query_attempts": 77,
+  "candidate_ids": 0,
+  "detail_records": 0,
+  "ingredient_candidate_rows": 0,
+  "target_forms_with_official_label_candidates": 0,
+  "target_forms_without_official_label_candidates": 42,
+  "working_search_pair": [
+    "https://api.ods.od.nih.gov/dsld/v9/search-filter",
+    "q"
+  ],
+  "runtime_admission": 0
+}
