@@ -1,0 +1,366 @@
+name: Temporary compare NIH DSLD and iHerb supplement components
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_compare_dsld_iherb_components.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Compare product identity, serving basis, and declared components
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/dsld-iherb-component-comparison/latest
+          mkdir -p temp-results/dsld-iherb-component-comparison/latest
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import math
+          import pathlib
+          import re
+          from collections import Counter, defaultdict
+          from typing import Any, Iterable
+
+          ROOT = pathlib.Path('.')
+          OUT = ROOT / 'temp-results/dsld-iherb-component-comparison/latest'
+          OUT.mkdir(parents=True, exist_ok=True)
+
+          IHERB_PRODUCTS = ROOT / 'temp-results/nutrition-supplement-collection/latest/product_candidates.jsonl'
+          IHERB_COMPONENTS = ROOT / 'temp-results/nutrition-supplement-collection/latest/component_candidates.jsonl'
+          DSLD_LABELS = ROOT / 'temp-results/dsld-label-details/latest/normalized_label_candidates.jsonl'
+
+          for required in (IHERB_PRODUCTS, IHERB_COMPONENTS, DSLD_LABELS):
+              if not required.is_file():
+                  raise RuntimeError(f'missing required input: {required}')
+
+          def read_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:
+              rows=[]
+              for n,line in enumerate(path.read_text(encoding='utf-8').splitlines(),1):
+                  if not line.strip(): continue
+                  obj=json.loads(line)
+                  if not isinstance(obj,dict):
+                      raise RuntimeError(f'{path}:{n} not an object')
+                  rows.append(obj)
+              return rows
+
+          def write_jsonl(path: pathlib.Path, rows: Iterable[dict[str, Any]]) -> None:
+              with path.open('w',encoding='utf-8',newline='\n') as f:
+                  for row in rows:
+                      f.write(json.dumps(row,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n')
+
+          def walk(v: Any):
+              if isinstance(v,dict):
+                  yield v
+                  for child in v.values(): yield from walk(child)
+              elif isinstance(v,list):
+                  for child in v: yield from walk(child)
+
+          def first_value(obj: dict[str,Any], keys: tuple[str,...]) -> Any:
+              lower={str(k).casefold():v for k,v in obj.items()}
+              for key in keys:
+                  val=lower.get(key.casefold())
+                  if val not in (None,'',[],{}): return val
+              return None
+
+          def compact_text(value: Any) -> str:
+              if value is None: return ''
+              if isinstance(value,(dict,list)):
+                  return json.dumps(value,ensure_ascii=False,sort_keys=True)
+              return str(value)
+
+          def norm_text(value: Any) -> str:
+              s=compact_text(value).casefold()
+              s=s.replace('®',' ').replace('™',' ')
+              s=re.sub(r'\b(?:tablets?|capsules?|softgels?|gummies|packets?|servings?|count|ct|powder|liquid|unflavored|flavored)\b',' ',s)
+              s=re.sub(r'\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|ug|g|ml|mL|iu|count|ct)\b',' ',s,flags=re.I)
+              s=re.sub(r'[^a-z0-9]+',' ',s)
+              return ' '.join(s.split())
+
+          def token_set(value: Any) -> set[str]:
+              return {x for x in norm_text(value).split() if len(x)>1}
+
+          def token_similarity(a: Any,b: Any) -> float:
+              x=token_set(a); y=token_set(b)
+              if not x or not y: return 0.0
+              return len(x&y)/len(x|y)
+
+          def digits(value: Any) -> str:
+              return re.sub(r'\D','',compact_text(value))
+
+          UNIT_ALIASES={
+              'µg':'ug','mcg':'ug','ug':'ug',
+              'mg':'mg','g':'g','kg':'kg',
+              'iu':'IU','i.u.':'IU','i.u':'IU',
+              'ml':'mL','milliliter':'mL','milliliters':'mL',
+          }
+          MASS_TO_MG={'ug':0.001,'mg':1.0,'g':1000.0,'kg':1_000_000.0}
+
+          def norm_unit(value: Any) -> str | None:
+              raw=compact_text(value).strip()
+              if not raw: return None
+              key=raw.casefold().replace('μ','µ')
+              return UNIT_ALIASES.get(key,raw)
+
+          def to_mg(amount: Any, unit: Any) -> float | None:
+              try: val=float(str(amount).replace(',',''))
+              except Exception: return None
+              u=norm_unit(unit)
+              if u not in MASS_TO_MG: return None
+              return val*MASS_TO_MG[u]
+
+          def number_from(value: Any) -> float | None:
+              if isinstance(value,(int,float)) and math.isfinite(float(value)): return float(value)
+              if isinstance(value,str):
+                  m=re.search(r'(?<![A-Za-z])([0-9]+(?:[.,][0-9]+)?)',value)
+                  if m:
+                      try:return float(m.group(1).replace(',','.'))
+                      except Exception:return None
+              return None
+
+          def serving_unit_from(value: Any) -> str | None:
+              text=compact_text(value).casefold()
+              aliases=(
+                  ('capsule','capsule'),('softgel','softgel'),('tablet','tablet'),
+                  ('gummy','gummy'),('packet','packet'),('scoop','scoop'),
+                  ('teaspoon','teaspoon'),('tablespoon','tablespoon'),
+                  ('drop','drop'),('ml','mL'),('gram','g'),('serving','serving'),
+              )
+              for needle,canonical in aliases:
+                  if needle in text:return canonical
+              return None
+
+          def serving_parts(value: Any) -> tuple[float|None,str|None,str]:
+              raw=compact_text(value)
+              if isinstance(value,dict):
+                  qty=number_from(value.get('quantity') or value.get('serving_quantity') or value.get('value'))
+                  unit=serving_unit_from(value.get('unit') or value.get('raw'))
+                  raw=compact_text(value.get('raw') or value)
+                  return qty,unit,raw
+              return number_from(raw),serving_unit_from(raw),raw
+
+          # Conservative nutrient aliases. Form-specific pools stay separate.
+          ALIASES: list[tuple[re.Pattern[str],str]]=[
+              (re.compile(r'\bvitamin\s*a\b',re.I),'vitamin_a_total'),
+              (re.compile(r'\bbeta[-\s]?carotene\b',re.I),'beta_carotene'),
+              (re.compile(r'\b(?:retinol|retinyl\s+(?:acetate|palmitate))\b',re.I),'preformed_vitamin_a'),
+              (re.compile(r'\bvitamin\s*d\b|\bcholecalciferol\b|\bergocalciferol\b',re.I),'vitamin_d'),
+              (re.compile(r'\bvitamin\s*e\b|\b(?:d-)?alpha[-\s]?tocopherol\b',re.I),'vitamin_e'),
+              (re.compile(r'\bvitamin\s*k\b|\bphylloquinone\b|\bmenaquinone\b',re.I),'vitamin_k'),
+              (re.compile(r'\bthiamin(?:e)?\b|\bvitamin\s*b1\b',re.I),'thiamin'),
+              (re.compile(r'\briboflavin\b|\bvitamin\s*b2\b',re.I),'riboflavin'),
+              (re.compile(r'\b(?:niacinamide|nicotinamide)\b',re.I),'nicotinamide'),
+              (re.compile(r'\bnicotinic\s+acid\b',re.I),'nicotinic_acid'),
+              (re.compile(r'\bniacin\b',re.I),'niacin_unspecified_form'),
+              (re.compile(r'\bvitamin\s*b6\b|\bpyridox',re.I),'vitamin_b6'),
+              (re.compile(r'\bfolic\s+acid\b',re.I),'folic_acid'),
+              (re.compile(r'\bmethylfolate\b|\b5[-\s]?mthf\b',re.I),'methylfolate'),
+              (re.compile(r'\bfolinic\s+acid\b|\bcalcium\s+folinate\b',re.I),'folinic_acid'),
+              (re.compile(r'\bfolate\b',re.I),'folate_unspecified_form'),
+              (re.compile(r'\bvitamin\s*b12\b|\bcobalamin\b',re.I),'vitamin_b12'),
+              (re.compile(r'\bbiotin\b',re.I),'biotin'),
+              (re.compile(r'\bpantothenic\s+acid\b|\bvitamin\s*b5\b',re.I),'pantothenic_acid'),
+              (re.compile(r'\bvitamin\s*c\b|\bascorb',re.I),'vitamin_c'),
+              (re.compile(r'\bcalcium\b',re.I),'calcium'),
+              (re.compile(r'\bphosphorus\b',re.I),'phosphorus'),
+              (re.compile(r'\bmagnesium\b',re.I),'magnesium'),
+              (re.compile(r'\biron\b',re.I),'iron'),
+              (re.compile(r'\bzinc\b',re.I),'zinc'),
+              (re.compile(r'\bcopper\b',re.I),'copper'),
+              (re.compile(r'\bmanganese\b',re.I),'manganese'),
+              (re.compile(r'\biodine\b|\biodide\b',re.I),'iodine'),
+              (re.compile(r'\bselenium\b',re.I),'selenium'),
+              (re.compile(r'\bchromium\b',re.I),'chromium'),
+              (re.compile(r'\bmolybdenum\b',re.I),'molybdenum'),
+              (re.compile(r'\bpotassium\b',re.I),'potassium'),
+              (re.compile(r'\bcholine\b',re.I),'choline'),
+              (re.compile(r'\bboron\b',re.I),'boron'),
+              (re.compile(r'\beicosapentaenoic\s+acid\b|\bepa\b',re.I),'epa'),
+              (re.compile(r'\bdocosahexaenoic\s+acid\b|\bdha\b',re.I),'dha'),
+              (re.compile(r'\bdocosapentaenoic\s+acid\b|\bdpa\b',re.I),'dpa'),
+              (re.compile(r'\balpha[-\s]?linolenic\s+acid\b',re.I),'alpha_linolenic_acid'),
+              (re.compile(r'\blinoleic\s+acid\b',re.I),'linoleic_acid'),
+              (re.compile(r'\bfiber\b|\bfibre\b',re.I),'dietary_fiber'),
+              (re.compile(r'\bprotein\b',re.I),'protein'),
+          ]
+          def canonical(name: Any)->str|None:
+              text=compact_text(name)
+              for pattern,cid in ALIASES:
+                  if pattern.search(text):return cid
+              return None
+
+          def ingredient_objects(dsld_row: dict[str,Any]) -> list[dict[str,Any]]:
+              raw=dsld_row.get('ingredient_objects')
+              return raw if isinstance(raw,list) else []
+
+          def extract_dsld_components(dsld_row:dict[str,Any])->list[dict[str,Any]]:
+              results=[]
+              for obj in ingredient_objects(dsld_row):
+                  if not isinstance(obj,dict):continue
+                  name=first_value(obj,('dietaryingredientname','ingredientname','ingredient_name','ingredient','name','labelname'))
+                  amount=first_value(obj,('amountperserving','servingamount','amount','quantity','amountvalue','ingredientamount'))
+                  unit=first_value(obj,('amountunit','unit','unitname','servingunit'))
+                  # Amount can be a nested object or string.
+                  if isinstance(amount,dict):
+                      unit=unit or first_value(amount,('unit','unitname','amountunit'))
+                      amount=first_value(amount,('value','amount','quantity'))
+                  if isinstance(amount,str) and unit is None:
+                      m=re.search(r'([0-9]+(?:[.,][0-9]+)?)\s*(mcg|µg|ug|mg|g|IU)\b',amount,re.I)
+                      if m:
+                          amount=m.group(1);unit=m.group(2)
+                  results.append({'raw_name':compact_text(name),'canonical_id':canonical(name),'amount':number_from(amount),'unit':norm_unit(unit),'raw':obj})
+              return results
+
+          iherb_products=read_jsonl(IHERB_PRODUCTS)
+          iherb_components=read_jsonl(IHERB_COMPONENTS)
+          dsld_labels=read_jsonl(DSLD_LABELS)
+
+          ih_components_by_id=defaultdict(list)
+          for row in iherb_components:
+              pid=str(row.get('product_id') or '')
+              ih_components_by_id[pid].append({'raw_name':compact_text(row.get('raw_name')),'canonical_id':canonical(row.get('raw_name')),'amount':number_from(row.get('amount')),'unit':norm_unit(row.get('unit')),'raw':row})
+
+          dsld_components_by_id={str(r.get('candidate_id')):extract_dsld_components(r) for r in dsld_labels}
+
+          # Build exact identifier indexes.
+          ih_by_upc=defaultdict(list)
+          for p in iherb_products:
+              for key in ('gtin','sku','upc'):
+                  d=digits(p.get(key))
+                  if len(d)>=8:ih_by_upc[d].append(p)
+
+          dsld_by_upc=defaultdict(list)
+          for d in dsld_labels:
+              code=digits(d.get('upc'))
+              if len(code)>=8:dsld_by_upc[code].append(d)
+
+          identity_candidates=[]
+          for ip in iherb_products:
+              ipid=str(ip.get('product_id') or '')
+              exact=[]
+              for key in ('gtin','sku','upc'):
+                  code=digits(ip.get(key))
+                  exact.extend(dsld_by_upc.get(code,[]))
+              seen=set(); exact=[d for d in exact if not (str(d.get('candidate_id')) in seen or seen.add(str(d.get('candidate_id'))))]
+              if exact:
+                  for d in exact:
+                      identity_candidates.append({'iherb':ip,'dsld':d,'identity_method':'exact_identifier','identity_score':1.0})
+                  continue
+              ip_text=' '.join(compact_text(x) for x in (ip.get('brand'),ip.get('product_name')))
+              for d in dsld_labels:
+                  d_text=' '.join(compact_text(x) for x in (d.get('brand'),d.get('product_name')))
+                  brand_score=token_similarity(ip.get('brand'),d.get('brand'))
+                  name_score=token_similarity(ip.get('product_name'),d.get('product_name'))
+                  combined=0.25*brand_score+0.75*name_score
+                  full_score=token_similarity(ip_text,d_text)
+                  score=max(combined,full_score)
+                  if score>=0.68 and name_score>=0.65:
+                      identity_candidates.append({'iherb':ip,'dsld':d,'identity_method':'strong_name_brand_candidate','identity_score':score,'brand_score':brand_score,'name_score':name_score})
+
+          # Keep best DSLD candidate per iHerb product unless exact IDs produce multiple revisions.
+          grouped=defaultdict(list)
+          for c in identity_candidates:grouped[str(c['iherb'].get('product_id') or '')].append(c)
+          selected=[]
+          for pid,rows in grouped.items():
+              rows.sort(key=lambda r:(r['identity_method']=='exact_identifier',r['identity_score']),reverse=True)
+              if rows and rows[0]['identity_method']=='exact_identifier':
+                  selected.extend([r for r in rows if r['identity_method']=='exact_identifier'])
+              elif rows:selected.append(rows[0])
+
+          comparison_rows=[]
+          product_results=[]
+          for match in selected:
+              ip=match['iherb']; d=match['dsld']
+              ipid=str(ip.get('product_id') or '')
+              did=str(d.get('candidate_id') or '')
+              ihs=ih_components_by_id.get(ipid,[])
+              dss=dsld_components_by_id.get(did,[])
+              ih_by_cid=defaultdict(list); ds_by_cid=defaultdict(list)
+              for x in ihs:
+                  if x['canonical_id']:ih_by_cid[x['canonical_id']].append(x)
+              for x in dss:
+                  if x['canonical_id']:ds_by_cid[x['canonical_id']].append(x)
+              common=sorted(set(ih_by_cid)&set(ds_by_cid))
+              value_agree=0; value_conflict=0; noncomparable=0
+              for cid in common:
+                  # Select first value with convertible mass unit; retain all raw candidates in evidence.
+                  iv=next((x for x in ih_by_cid[cid] if to_mg(x['amount'],x['unit']) is not None),None)
+                  dv=next((x for x in ds_by_cid[cid] if to_mg(x['amount'],x['unit']) is not None),None)
+                  status='noncomparable_unit_or_amount'
+                  rel_diff=None
+                  if iv and dv:
+                      ia=to_mg(iv['amount'],iv['unit']); da=to_mg(dv['amount'],dv['unit'])
+                      denom=max(abs(ia),abs(da),1e-12)
+                      rel_diff=abs(ia-da)/denom
+                      status='declared_amount_agrees' if rel_diff<=0.005 else 'declared_amount_conflict'
+                  if status=='declared_amount_agrees':value_agree+=1
+                  elif status=='declared_amount_conflict':value_conflict+=1
+                  else:noncomparable+=1
+                  comparison_rows.append({'iherb_product_id':ipid,'dsld_candidate_id':did,'canonical_id':cid,'identity_method':match['identity_method'],'identity_score':match['identity_score'],'iherb_candidates':ih_by_cid[cid],'dsld_candidates':ds_by_cid[cid],'comparison_status':status,'relative_difference':rel_diff,'runtime_admission_allowed':False})
+              iq,iu,iraw=serving_parts(ip.get('serving'))
+              dq,du,draw=serving_parts(d.get('serving_raw'))
+              serving_status='serving_unresolved'
+              if iq is not None and dq is not None and iu and du:
+                  serving_status='serving_agrees' if abs(iq-dq)<1e-9 and iu==du else 'serving_conflict'
+              elif iraw and draw and norm_text(iraw)==norm_text(draw):
+                  serving_status='serving_agrees_text'
+              if match['identity_method']=='exact_identifier' and serving_status.startswith('serving_agrees') and value_conflict==0 and value_agree>=1:
+                  status='independent_partial_or_full_agreement'
+              elif value_conflict>0 or serving_status=='serving_conflict':
+                  status='source_conflict'
+              else:
+                  status='identity_or_component_review_required'
+              product_results.append({'iherb_product_id':ipid,'iherb_brand':ip.get('brand'),'iherb_product_name':ip.get('product_name'),'iherb_source_url':ip.get('final_url') or ip.get('source_url'),'iherb_page_sha256':ip.get('page_sha256'),'dsld_candidate_id':did,'dsld_brand':d.get('brand'),'dsld_product_name':d.get('product_name'),'dsld_source_url':d.get('source_url'),'dsld_source_sha256':d.get('source_sha256'),'identity_method':match['identity_method'],'identity_score':match['identity_score'],'serving_status':serving_status,'common_canonical_components':len(common),'declared_amount_agreements':value_agree,'declared_amount_conflicts':value_conflict,'noncomparable_common_components':noncomparable,'iherb_mapped_component_count':sum(len(v) for v in ih_by_cid.values()),'dsld_mapped_component_count':sum(len(v) for v in ds_by_cid.values()),'comparison_status':status,'runtime_admission_allowed':False})
+
+          product_results.sort(key=lambda x:(x['comparison_status'],str(x['iherb_product_id']),str(x['dsld_candidate_id'])))
+          comparison_rows.sort(key=lambda x:(str(x['iherb_product_id']),str(x['dsld_candidate_id']),x['canonical_id']))
+          write_jsonl(OUT/'product_comparison_results.jsonl',product_results)
+          write_jsonl(OUT/'component_comparison_results.jsonl',comparison_rows)
+
+          summary={
+              'iherb_products':len(iherb_products),
+              'iherb_component_candidates':len(iherb_components),
+              'dsld_label_candidates':len(dsld_labels),
+              'identity_candidate_pairs':len(identity_candidates),
+              'selected_product_pairs':len(product_results),
+              'exact_identifier_pairs':sum(r['identity_method']=='exact_identifier' for r in product_results),
+              'strong_name_brand_pairs':sum(r['identity_method']=='strong_name_brand_candidate' for r in product_results),
+              'products_with_independent_agreement':sum(r['comparison_status']=='independent_partial_or_full_agreement' for r in product_results),
+              'products_with_source_conflict':sum(r['comparison_status']=='source_conflict' for r in product_results),
+              'products_requiring_review':sum(r['comparison_status']=='identity_or_component_review_required' for r in product_results),
+              'component_comparison_rows':len(comparison_rows),
+              'declared_amount_agreements':sum(r['comparison_status']=='declared_amount_agrees' for r in comparison_rows),
+              'declared_amount_conflicts':sum(r['comparison_status']=='declared_amount_conflict' for r in comparison_rows),
+              'noncomparable_component_rows':sum(r['comparison_status']=='noncomparable_unit_or_amount' for r in comparison_rows),
+              'runtime_admission':0,
+          }
+          (OUT/'comparison_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit comparison results
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/dsld-iherb-component-comparison -czf temp-results/dsld-iherb-component-comparison/latest.tar.gz latest
+          sha256sum temp-results/dsld-iherb-component-comparison/latest.tar.gz > temp-results/dsld-iherb-component-comparison/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/dsld-iherb-component-comparison
+          git commit -m 'chore: record temporary DSLD/iHerb component comparison' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
