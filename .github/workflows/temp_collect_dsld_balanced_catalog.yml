@@ -1,0 +1,210 @@
+name: Temporary collect balanced NIH DSLD supplement catalog
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_collect_dsld_balanced_catalog.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Collect a balanced official label set by nutrient and form
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/dsld-balanced-catalog/latest
+          mkdir -p temp-results/dsld-balanced-catalog/latest/payloads
+          python3 - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, pathlib, re, time, urllib.parse, urllib.request
+          from collections import Counter, defaultdict
+          from typing import Any
+
+          OUT=pathlib.Path('temp-results/dsld-balanced-catalog/latest')
+          PAYLOADS=OUT/'payloads'
+          UA='Mozilla/5.0 (compatible; EiyouNote-public-nutrition-research/1.0; +https://github.com/dcftradingcrypt/contena)'
+          HEADERS={'User-Agent':UA,'Accept':'application/json,text/plain,*/*;q=0.5','Accept-Language':'en-US,en;q=0.9'}
+          TARGETS={
+            'preformed_vitamin_a':['retinyl palmitate','retinyl acetate','vitamin a'],
+            'beta_carotene':['beta carotene'],
+            'vitamin_d3':['cholecalciferol','vitamin d3'],
+            'vitamin_d2':['ergocalciferol','vitamin d2'],
+            'vitamin_e':['alpha tocopherol','vitamin e'],
+            'vitamin_k1':['phylloquinone','vitamin k1'],
+            'vitamin_k2':['menaquinone','vitamin k2'],
+            'thiamine':['thiamine','benfotiamine'],
+            'riboflavin':['riboflavin','riboflavin 5 phosphate'],
+            'nicotinic_acid':['nicotinic acid'],
+            'nicotinamide':['niacinamide','nicotinamide'],
+            'inositol_hexanicotinate':['inositol hexanicotinate'],
+            'vitamin_b6':['pyridoxine','pyridoxal 5 phosphate'],
+            'folic_acid':['folic acid'],
+            'methylfolate':['methylfolate','5 mthf'],
+            'folinic_acid':['folinic acid','calcium folinate'],
+            'vitamin_b12':['cyanocobalamin','methylcobalamin','adenosylcobalamin','hydroxocobalamin'],
+            'biotin':['biotin'],
+            'pantothenic_acid':['pantothenic acid'],
+            'vitamin_c':['ascorbic acid','calcium ascorbate','sodium ascorbate'],
+            'calcium':['calcium citrate','calcium carbonate'],
+            'phosphorus':['phosphorus','phosphate'],
+            'magnesium':['magnesium citrate','magnesium glycinate','magnesium oxide'],
+            'iron':['ferrous sulfate','ferrous fumarate','iron bisglycinate'],
+            'zinc':['zinc picolinate','zinc gluconate'],
+            'copper':['copper gluconate','copper bisglycinate'],
+            'manganese':['manganese'],
+            'iodine':['potassium iodide','iodine'],
+            'selenium':['selenomethionine','sodium selenite'],
+            'chromium':['chromium picolinate'],
+            'molybdenum':['molybdenum'],
+            'potassium':['potassium citrate'],
+            'choline':['choline bitartrate','alpha gpc','citicoline'],
+            'boron':['boron glycinate','boron citrate'],
+            'epa':['eicosapentaenoic acid','EPA'],
+            'dha':['docosahexaenoic acid','DHA'],
+            'ala':['alpha linolenic acid'],
+            'linoleic_acid':['linoleic acid'],
+            'dietary_fiber':['psyllium','inulin','dietary fiber'],
+            'protein':['protein powder'],
+            'multivitamin':['multivitamin'],
+            'multimineral':['multimineral'],
+          }
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def fetch(url,max_bytes=12_000_000):
+              req=urllib.request.Request(url,headers=HEADERS)
+              with urllib.request.urlopen(req,timeout=45) as r:
+                  body=r.read(max_bytes+1)
+                  if len(body)>max_bytes:raise RuntimeError('payload too large')
+                  return getattr(r,'status',200),r.geturl(),{k.lower():v for k,v in r.headers.items()},body
+          def walk(v:Any):
+              if isinstance(v,dict):
+                  yield v
+                  for x in v.values():yield from walk(x)
+              elif isinstance(v,list):
+                  for x in v:yield from walk(x)
+          def first(d:dict,names):
+              lower={str(k).casefold():v for k,v in d.items()}
+              for n in names:
+                  v=lower.get(n.casefold())
+                  if v not in (None,'',[],{}):return v
+              return None
+          def likely_label_obj(d:dict)->bool:
+              keys=' '.join(str(k).casefold() for k in d)
+              return any(k in keys for k in ('label','product','brand','ingredient')) and any(k.casefold() in {str(x).casefold() for x in d} for k in ('id','dsldId','dsld_id','labelId','label_id','productId','product_id'))
+          # Recover proven endpoint conventions from prior verification.
+          verified=pathlib.Path('temp-results/dsld-verified/latest/search_records.jsonl')
+          pairs=[]
+          if verified.exists():
+              for line in verified.read_text(encoding='utf-8').splitlines():
+                  if not line.strip():continue
+                  r=json.loads(line)
+                  if r.get('json_type') and r.get('base') and r.get('param'):
+                      pairs.append((r['base'],r['param']))
+          # Stable fallbacks used only if the prior verifier found no pair.
+          if not pairs:pairs=[('https://api.ods.od.nih.gov/dsld/v9/search-filter','q'),('https://api.ods.od.nih.gov/dsld/v9/labels','q')]
+          seen=set();pairs=[x for x in pairs if not (x in seen or seen.add(x))]
+
+          query_records=[];candidate_map={}
+          working_pair=None
+          for target,queries in TARGETS.items():
+              for query in queries:
+                  response_obj=None;used=None
+                  for base,param in pairs:
+                      url=base+('?' if '?' not in base else '&')+urllib.parse.urlencode({param:query,'page':1,'pageSize':25})
+                      row={'target_form':target,'query':query,'base':base,'param':param,'url':url}
+                      try:
+                          s,f,h,b=fetch(url);text=b.decode('utf-8','replace');obj=json.loads(text) if text.lstrip().startswith(('{','[')) else None
+                          row.update({'status':s,'final_url':f,'content_type':h.get('content-type'),'size_bytes':len(b),'sha256':sha(b),'json_type':type(obj).__name__ if obj is not None else None})
+                          query_records.append(row)
+                          if obj is not None:
+                              response_obj=obj;used=(base,param);working_pair=working_pair or used;break
+                      except Exception as exc:row['error']=repr(exc);query_records.append(row)
+                      time.sleep(0.2)
+                  if response_obj is None:continue
+                  for d in walk(response_obj):
+                      if not isinstance(d,dict) or not likely_label_obj(d):continue
+                      cid=first(d,('dsldId','dsld_id','labelId','label_id','productId','product_id','id'))
+                      if cid in (None,''):continue
+                      key=str(cid)
+                      item=candidate_map.setdefault(key,{'candidate_id':key,'target_forms':set(),'queries':set(),'raw_candidates':[]})
+                      item['target_forms'].add(target);item['queries'].add(query);item['raw_candidates'].append(d)
+                  time.sleep(0.2)
+
+          # Retrieve details using previously demonstrated path variants.
+          patterns=[
+              'https://api.ods.od.nih.gov/dsld/v9/label/{id}',
+              'https://api.ods.od.nih.gov/dsld/v9/labels/{id}',
+              'https://api.ods.od.nih.gov/dsld/v9/label/{id}/full',
+              'https://api.ods.od.nih.gov/dsld/v9/labels/{id}/full',
+              'https://api.ods.od.nih.gov/dsld/v9/label?id={id}',
+              'https://api.ods.od.nih.gov/dsld/v9/labels?id={id}',
+          ]
+          details=[];ingredients=[];attempts=[]
+          for idx,(cid,cand) in enumerate(sorted(candidate_map.items())[:500]):
+              selected=None
+              for pattern in patterns:
+                  url=pattern.format(id=urllib.parse.quote(cid,safe=''));a={'candidate_id':cid,'url':url}
+                  try:
+                      s,f,h,b=fetch(url);text=b.decode('utf-8','replace');obj=json.loads(text) if text.lstrip().startswith(('{','[')) else None
+                      a.update({'status':s,'final_url':f,'content_type':h.get('content-type'),'size_bytes':len(b),'sha256':sha(b),'json_type':type(obj).__name__ if obj is not None else None})
+                      attempts.append(a)
+                      if obj is not None and len(b)>20:
+                          selected=(f,b,obj);break
+                  except Exception as exc:a['error']=repr(exc);attempts.append(a)
+                  time.sleep(0.1)
+              if not selected:continue
+              final,body,obj=selected
+              fname=f'{idx:03d}_{re.sub(r"[^A-Za-z0-9_.-]+","_",cid)[:60]}.json';(PAYLOADS/fname).write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+              product_name=brand=upc=serving=None
+              for d in walk(obj):
+                  if not isinstance(d,dict):continue
+                  product_name=product_name or first(d,('productName','product_name','fullName','labelName','name'))
+                  brand=brand or first(d,('brandName','brand_name','brand','manufacturerName','manufacturer'))
+                  upc=upc or first(d,('upc','gtin','barcode'))
+                  serving=serving or first(d,('servingSize','serving_size','serving'))
+                  keys={str(k).casefold() for k in d}
+                  name=first(d,('dietaryIngredientName','ingredientName','ingredient_name','ingredient','name','labelName'))
+                  amount=first(d,('amountPerServing','servingAmount','amount','quantity','amountValue','ingredientAmount'))
+                  unit=first(d,('amountUnit','unit','unitName','servingUnit'))
+                  if name is not None and amount is not None:
+                      ingredients.append({'candidate_id':cid,'product_name':product_name,'brand':brand,'source_url':final,'source_sha256':sha(body),'raw_name':name,'amount_raw':amount,'unit_raw':unit,'raw':d,'runtime_admission_allowed':False})
+              details.append({'candidate_id':cid,'target_forms':sorted(cand['target_forms']),'queries':sorted(cand['queries']),'product_name':product_name,'brand':brand,'upc':upc,'serving_raw':serving,'source_url':final,'source_sha256':sha(body),'payload_file':fname,'ingredient_candidate_count':sum(1 for x in ingredients if x['candidate_id']==cid),'runtime_admission_allowed':False})
+
+          def write_jsonl(path,rows):
+              with open(path,'w',encoding='utf-8',newline='\n') as f:
+                  for r in rows:f.write(json.dumps(r,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n')
+          # Convert sets before writing candidate inventory.
+          candidates=[]
+          for cid,c in sorted(candidate_map.items()):candidates.append({'candidate_id':cid,'target_forms':sorted(c['target_forms']),'queries':sorted(c['queries']),'raw_candidate_count':len(c['raw_candidates']),'runtime_admission_allowed':False})
+          write_jsonl(OUT/'query_records.jsonl',query_records);write_jsonl(OUT/'candidate_ids.jsonl',candidates);write_jsonl(OUT/'detail_records.jsonl',details);write_jsonl(OUT/'ingredient_candidates.jsonl',ingredients);write_jsonl(OUT/'detail_attempts.jsonl',attempts)
+          coverage=[]
+          for target in TARGETS:
+              ds=[d for d in details if target in d['target_forms']]
+              coverage.append({'target_form':target,'queries':TARGETS[target],'candidate_ids':sum(1 for c in candidates if target in c['target_forms']),'detail_records':len(ds),'labels_with_ingredient_candidates':sum(d['ingredient_candidate_count']>0 for d in ds),'ingredient_candidate_rows':sum(d['ingredient_candidate_count'] for d in ds),'coverage_status':'official_label_candidates_present' if any(d['ingredient_candidate_count']>0 for d in ds) else 'official_label_candidate_missing','runtime_admission_allowed':False})
+          write_jsonl(OUT/'coverage_matrix.jsonl',coverage)
+          summary={'target_form_count':len(TARGETS),'query_attempts':len(query_records),'candidate_ids':len(candidates),'detail_records':len(details),'ingredient_candidate_rows':len(ingredients),'target_forms_with_official_label_candidates':sum(r['coverage_status']=='official_label_candidates_present' for r in coverage),'target_forms_without_official_label_candidates':sum(r['coverage_status']!='official_label_candidates_present' for r in coverage),'working_search_pair':working_pair,'runtime_admission':0}
+          (OUT/'collection_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit balanced catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/dsld-balanced-catalog -czf temp-results/dsld-balanced-catalog/latest.tar.gz latest
+          sha256sum temp-results/dsld-balanced-catalog/latest.tar.gz > temp-results/dsld-balanced-catalog/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/dsld-balanced-catalog
+          git commit -m 'chore: record temporary balanced NIH DSLD catalog' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
