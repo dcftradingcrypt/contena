@@ -1,0 +1,218 @@
+name: Temporary targeted iHerb supplement-form coverage
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_collect_iherb_form_coverage.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Collect targeted public products for nutrient-form coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/iherb-form-coverage/latest
+          mkdir -p temp-results/iherb-form-coverage/latest
+          python3 - <<'PY'
+          from __future__ import annotations
+          import concurrent.futures, hashlib, html, json, pathlib, re, time, urllib.parse, urllib.request, urllib.robotparser
+          from collections import Counter, defaultdict
+          from typing import Any
+
+          OUT=pathlib.Path('temp-results/iherb-form-coverage/latest')
+          UA='Mozilla/5.0 (compatible; EiyouNote-public-nutrition-research/1.0; +https://github.com/dcftradingcrypt/contena)'
+          HEADERS={'User-Agent':UA,'Accept':'text/html,application/xhtml+xml,application/json,*/*;q=0.5','Accept-Language':'en-US,en;q=0.9'}
+          MAX_BYTES=5_000_000
+          TARGETS={
+            'preformed_vitamin_a':['retinyl palmitate vitamin a','retinyl acetate vitamin a','retinol vitamin a'],
+            'beta_carotene':['beta carotene supplement'],
+            'vitamin_d3':['vitamin d3 cholecalciferol'],
+            'vitamin_d2':['vitamin d2 ergocalciferol'],
+            'alpha_tocopherol':['d alpha tocopherol vitamin e','dl alpha tocopheryl acetate'],
+            'mixed_tocopherols':['mixed tocopherols'],
+            'vitamin_k1':['vitamin k1 phylloquinone'],
+            'vitamin_k2_mk4':['vitamin k2 mk 4'],
+            'vitamin_k2_mk7':['vitamin k2 mk 7'],
+            'thiamine_hcl':['thiamine hcl'],
+            'benfotiamine':['benfotiamine'],
+            'riboflavin':['riboflavin vitamin b2'],
+            'riboflavin_5_phosphate':['riboflavin 5 phosphate'],
+            'nicotinic_acid':['nicotinic acid niacin'],
+            'nicotinamide':['niacinamide nicotinamide'],
+            'inositol_hexanicotinate':['inositol hexanicotinate no flush niacin'],
+            'pyridoxine_hcl':['pyridoxine hcl vitamin b6'],
+            'p5p':['p 5 p pyridoxal 5 phosphate'],
+            'folic_acid':['folic acid supplement'],
+            'methylfolate':['l methylfolate 5 mthf'],
+            'folinic_acid':['folinic acid calcium folinate'],
+            'cyanocobalamin':['cyanocobalamin vitamin b12'],
+            'methylcobalamin':['methylcobalamin vitamin b12'],
+            'adenosylcobalamin':['adenosylcobalamin dibencozide'],
+            'hydroxocobalamin':['hydroxocobalamin supplement'],
+            'biotin':['biotin supplement'],
+            'pantothenic_acid':['pantothenic acid calcium pantothenate'],
+            'vitamin_c_ascorbic_acid':['ascorbic acid vitamin c'],
+            'vitamin_c_mineral_ascorbate':['calcium ascorbate sodium ascorbate'],
+            'calcium_citrate':['calcium citrate'],
+            'calcium_carbonate':['calcium carbonate supplement'],
+            'phosphorus':['phosphorus supplement phosphate'],
+            'magnesium_citrate':['magnesium citrate'],
+            'magnesium_glycinate':['magnesium glycinate'],
+            'magnesium_oxide':['magnesium oxide'],
+            'iron_ferrous':['ferrous sulfate fumarate iron'],
+            'iron_bisglycinate':['iron bisglycinate'],
+            'zinc':['zinc picolinate gluconate citrate'],
+            'copper':['copper gluconate bisglycinate'],
+            'manganese':['manganese supplement'],
+            'iodine':['iodine potassium iodide kelp'],
+            'selenium':['selenium selenomethionine sodium selenite'],
+            'chromium':['chromium picolinate'],
+            'molybdenum':['molybdenum supplement'],
+            'potassium':['potassium citrate supplement'],
+            'choline_bitartrate':['choline bitartrate'],
+            'alpha_gpc':['alpha gpc choline'],
+            'citicoline':['citicoline cdp choline'],
+            'boron':['boron glycinate citrate'],
+            'epa_dha_fish_oil':['epa dha fish oil supplement facts'],
+            'dha_algal':['algal dha'],
+            'epa_concentrate':['epa concentrate'],
+            'ala_flax':['alpha linolenic acid flax oil'],
+            'linoleic_acid':['linoleic acid supplement'],
+            'fiber_psyllium':['psyllium fiber supplement facts'],
+            'fiber_inulin':['inulin fiber supplement facts'],
+            'multivitamin':['multivitamin supplement facts'],
+            'multimineral':['multimineral supplement facts'],
+          }
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def fetch(url,max_bytes=MAX_BYTES,timeout=45):
+              req=urllib.request.Request(url,headers=HEADERS)
+              with urllib.request.urlopen(req,timeout=timeout) as r:
+                  body=r.read(max_bytes+1)
+                  if len(body)>max_bytes:raise RuntimeError('payload too large')
+                  return getattr(r,'status',200),r.geturl(),{k.lower():v for k,v in r.headers.items()},body
+          def clean_url(raw,base='https://www.iherb.com'):
+              raw=html.unescape(raw).replace('\\/','/')
+              if raw.startswith('/'):raw=urllib.parse.urljoin(base,raw)
+              p=urllib.parse.urlsplit(raw)
+              if p.scheme not in ('http','https') or p.netloc.casefold().removeprefix('www.').removeprefix('jp.')!='iherb.com':return None
+              if '/pr/' not in p.path.casefold():return None
+              return urllib.parse.urlunsplit(('https','www.iherb.com',re.sub(r'/+','/',p.path).rstrip('/'),'',''))
+          def urls(text,base):
+              out=set()
+              for pattern in (r'https?://(?:www\\.|jp\\.)?iherb\\.com/pr/[^\\s"\'<>\\\\]+',r'["\'](/pr/[^"\'<>]+)["\']'):
+                  for m in re.finditer(pattern,text,re.I):
+                      u=clean_url(m.group(1) if m.lastindex else m.group(0),base)
+                      if u:out.add(u)
+              return out
+          # Respect robots for search and product fetches.
+          rp=urllib.robotparser.RobotFileParser();rp.set_url('https://www.iherb.com/robots.txt')
+          try:
+              s,f,h,b=fetch('https://www.iherb.com/robots.txt',max_bytes=500000);rp.parse(b.decode('utf-8','replace').splitlines())
+          except Exception:
+              rp=None
+          def allowed(u):return rp.can_fetch(UA,u) if rp is not None else False
+
+          discovery=[];url_targets=defaultdict(set)
+          for target,queries in TARGETS.items():
+              for q in queries:
+                  for page in (1,2):
+                      url='https://www.iherb.com/search?'+urllib.parse.urlencode({'kw':q,'p':page})
+                      row={'target_form':target,'query':q,'page':page,'url':url}
+                      if not allowed(url):
+                          row['status']='robots_disallowed_or_unavailable';discovery.append(row);continue
+                      try:
+                          status,final,headers,body=fetch(url,max_bytes=3000000)
+                          text=body.decode('utf-8','replace');found=sorted(urls(text,final))[:12]
+                          row.update({'status':'fetched','http_status':status,'bytes':len(body),'sha256':sha(body),'product_url_count':len(found)})
+                          for u in found:url_targets[u].add(target)
+                      except Exception as exc:row['status']='error';row['error']=repr(exc)
+                      discovery.append(row);time.sleep(0.8)
+
+          # Include previously collected products for deduplication/coverage.
+          previous=pathlib.Path('temp-results/nutrition-supplement-collection/latest/product_urls.txt')
+          if previous.exists():
+              for line in previous.read_text(encoding='utf-8').splitlines():
+                  u=clean_url(line.strip())
+                  if u:url_targets[u].add('previous_general_collection')
+          product_urls=sorted(url_targets)[:600]
+
+          def strip_tags(raw):
+              raw=re.sub(r'(?is)<script[^>]*>.*?</script>',' ',raw);raw=re.sub(r'(?is)<style[^>]*>.*?</style>',' ',raw)
+              raw=re.sub(r'(?i)<br\s*/?>','\n',raw);raw=re.sub(r'(?i)</(?:p|div|li|tr|td|th|h[1-6])>','\n',raw);raw=re.sub(r'(?s)<[^>]+>',' ',raw)
+              raw=html.unescape(raw);raw=re.sub(r'[ \t]+',' ',raw);raw=re.sub(r'\n\s*\n+','\n',raw);return raw.strip()
+          def excerpt(page,text):
+              c=[]
+              for pat in (r'(?is)Supplement Facts.{0,30000}?(?:Other ingredients|Suggested use|Warnings|Disclaimer)',r'(?is)Supplement Facts.{0,20000}',r'(?is)Nutrition Facts.{0,20000}'):
+                  for src in (page,text):
+                      m=re.search(pat,src)
+                      if m:c.append(strip_tags(m.group(0)))
+              return max(c,key=len)[:26000] if c else None
+          AMOUNT=re.compile(r'(?P<lt><\s*)?(?P<num>\d+(?:[.,]\d+)?)\s*(?P<unit>mcg|µg|ug|mg|g|IU|i\.?u\.?)\b',re.I)
+          def comps(ex):
+              if not ex:return []
+              out=[]
+              for n,line in enumerate(re.sub(r'[|•]','\n',ex).splitlines(),1):
+                  line=re.sub(r'\s+',' ',line).strip();low=line.casefold()
+                  if len(line)<3 or len(line)>500 or any(low.startswith(x) for x in ('serving size','servings per container','amount per serving','supplement facts','daily value','other ingredients','suggested use','warnings')):continue
+                  m=AMOUNT.search(line)
+                  if not m:continue
+                  name=line[:m.start()].strip(' :-*†')
+                  if not name or len(name)>220:continue
+                  out.append({'line_no':n,'raw_line':line,'raw_name':name,'amount':float(m.group('num').replace(',','.')),'unit':m.group('unit'),'comparator':'<' if m.group('lt') else '='})
+              return out
+          def parse(u):
+              row={'source_url':u,'target_forms':sorted(url_targets[u]),'runtime_admission_allowed':False};cs=[]
+              if not allowed(u):row['fetch_status']='robots_disallowed_or_unavailable';return row,cs
+              try:
+                  status,final,headers,body=fetch(u);page=body.decode('utf-8','replace');text=strip_tags(page);ex=excerpt(page,text)
+                  tm=re.search(r'(?is)<title[^>]*>(.*?)</title>',page);title=strip_tags(tm.group(1)) if tm else None
+                  im=re.search(r'/(\d+)(?:/)?$',urllib.parse.urlsplit(final).path)
+                  row.update({'fetch_status':'fetched','http_status':status,'final_url':final,'product_id':im.group(1) if im else None,'page_title':title,'page_size_bytes':len(body),'page_sha256':sha(body),'supplement_facts_found':bool(ex),'facts_excerpt':ex,'facts_excerpt_sha256':sha(ex.encode()) if ex else None})
+                  cs=comps(ex)
+                  for c in cs:c.update({'product_id':row.get('product_id'),'source_url':final,'page_sha256':row['page_sha256'],'target_forms':row['target_forms'],'runtime_admission_allowed':False})
+                  row['component_candidate_count']=len(cs)
+              except Exception as exc:row['fetch_status']='error';row['error']=repr(exc)
+              return row,cs
+          products=[];components=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+              futs={pool.submit(parse,u):u for u in product_urls}
+              for fut in concurrent.futures.as_completed(futs):
+                  p,cs=fut.result();products.append(p);components.extend(cs)
+          products.sort(key=lambda r:(r.get('product_id') or '',r['source_url']));components.sort(key=lambda r:(r.get('product_id') or '',r.get('line_no',0)))
+          def write_jsonl(path,rows):
+              with open(path,'w',encoding='utf-8',newline='\n') as f:
+                  for r in rows:f.write(json.dumps(r,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n')
+          write_jsonl(OUT/'product_candidates.jsonl',products);write_jsonl(OUT/'component_candidates.jsonl',components);write_jsonl(OUT/'discovery_log.jsonl',discovery)
+          coverage=[]
+          for target in TARGETS:
+              urls_for={u for u,ts in url_targets.items() if target in ts};rows=[p for p in products if target in p.get('target_forms',[])]
+              coverage.append({'target_form':target,'queries':TARGETS[target],'discovered_urls':len(urls_for),'fetched_products':sum(p.get('fetch_status')=='fetched' for p in rows),'products_with_supplement_facts':sum(bool(p.get('supplement_facts_found')) for p in rows),'component_candidate_rows':sum(p.get('component_candidate_count',0) for p in rows),'coverage_status':'candidate_coverage_present' if any(p.get('supplement_facts_found') for p in rows) else 'no_label_candidate_found','runtime_admission_allowed':False})
+          write_jsonl(OUT/'form_coverage_matrix.jsonl',coverage)
+          summary={'target_form_count':len(TARGETS),'target_forms_with_candidate_coverage':sum(r['coverage_status']=='candidate_coverage_present' for r in coverage),'target_forms_without_candidate_coverage':sum(r['coverage_status']!='candidate_coverage_present' for r in coverage),'unique_product_urls':len(product_urls),'fetched_products':sum(p.get('fetch_status')=='fetched' for p in products),'products_with_supplement_facts':sum(bool(p.get('supplement_facts_found')) for p in products),'component_candidate_rows':len(components),'runtime_admission':0}
+          (OUT/'collection_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit coverage results
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/iherb-form-coverage -czf temp-results/iherb-form-coverage/latest.tar.gz latest
+          sha256sum temp-results/iherb-form-coverage/latest.tar.gz > temp-results/iherb-form-coverage/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/iherb-form-coverage
+          git commit -m 'chore: record temporary targeted supplement-form coverage' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
