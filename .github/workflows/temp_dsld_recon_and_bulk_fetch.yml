@@ -1,0 +1,142 @@
+name: Temporary NIH DSLD reconnaissance and bulk fetch
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_dsld_recon_and_bulk_fetch.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Discover official NIH DSLD data and API routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/dsld-recon/latest
+          mkdir -p temp-results/dsld-recon/latest/downloads
+          python3 - <<'PY'
+          from __future__ import annotations
+          import collections, hashlib, html, json, pathlib, re, time, urllib.parse, urllib.request, urllib.error, zipfile, io
+
+          OUT=pathlib.Path('temp-results/dsld-recon/latest')
+          DOWNLOADS=OUT/'downloads'
+          UA='Mozilla/5.0 (compatible; EiyouNote-public-nutrition-research/1.0; +https://github.com/dcftradingcrypt/contena)'
+          HEADERS={'User-Agent':UA,'Accept':'text/html,application/json,application/xml,text/plain,text/csv,application/zip,*/*;q=0.5','Accept-Language':'en-US,en;q=0.9'}
+          MAX_BYTES=25_000_000
+
+          def sha(data:bytes)->str: return hashlib.sha256(data).hexdigest()
+          def fetch(url:str, max_bytes:int=MAX_BYTES):
+              req=urllib.request.Request(url,headers=HEADERS)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  body=r.read(max_bytes+1)
+                  if len(body)>max_bytes: raise RuntimeError(f'body exceeds {max_bytes}')
+                  return getattr(r,'status',200),r.geturl(),{k.lower():v for k,v in r.headers.items()},body
+          def norm(url:str,base:str)->str|None:
+              u=urllib.parse.urljoin(base,html.unescape(url.strip()))
+              p=urllib.parse.urlsplit(u)
+              if p.scheme not in ('http','https'): return None
+              if not p.netloc.lower().endswith(('dsld.od.nih.gov','ods.od.nih.gov')): return None
+              return urllib.parse.urlunsplit((p.scheme,p.netloc,p.path,p.query,''))
+          def links(text:str,base:str):
+              vals=set()
+              for m in re.finditer(r'(?is)(?:href|src)\s*=\s*["\']([^"\']+)["\']',text):
+                  u=norm(m.group(1),base)
+                  if u: vals.add(u)
+              for m in re.finditer(r'https?://[^\s"\'<>]+',text):
+                  u=norm(m.group(0),base)
+                  if u: vals.add(u)
+              return vals
+
+          seeds=[
+              'https://dsld.od.nih.gov/',
+              'https://dsld.od.nih.gov/robots.txt',
+              'https://dsld.od.nih.gov/sitemap.xml',
+              'https://ods.od.nih.gov/HealthInformation/DSLD.aspx',
+              'https://dsld.od.nih.gov/api',
+              'https://dsld.od.nih.gov/swagger',
+              'https://dsld.od.nih.gov/swagger/index.html',
+              'https://dsld.od.nih.gov/openapi.json',
+              'https://dsld.od.nih.gov/swagger/v1/swagger.json',
+              'https://dsld.od.nih.gov/api/swagger.json',
+          ]
+          q=collections.deque((u,0) for u in seeds)
+          visited=set(); records=[]; discovered=set(seeds); candidate_data=[]
+          while q and len(visited)<120:
+              url,depth=q.popleft()
+              if url in visited: continue
+              visited.add(url)
+              row={'url':url,'depth':depth}
+              try:
+                  status,final,headers,body=fetch(url)
+                  ctype=headers.get('content-type','')
+                  row.update({'status':status,'final_url':final,'content_type':ctype,'size_bytes':len(body),'sha256':sha(body)})
+                  lower=(final+' '+ctype).lower()
+                  suffix=pathlib.Path(urllib.parse.urlsplit(final).path).suffix.lower()
+                  if any(x in lower for x in ('json','csv','zip','xlsx','download','export','api')) or suffix in ('.json','.csv','.zip','.xlsx','.xml'):
+                      candidate_data.append({'url':final,'content_type':ctype,'size_bytes':len(body),'sha256':sha(body)})
+                  text=body.decode('utf-8','replace') if ('text' in ctype.lower() or 'json' in ctype.lower() or 'xml' in ctype.lower() or suffix in ('.js','.json','.xml','.html','')) else ''
+                  if text:
+                      endpoint_strings=sorted(set(re.findall(r'(?i)(?:https?://[^\s"\'<>]+|/[A-Za-z0-9_./?=&%:-]*(?:api|download|export|search|label|swagger|openapi)[A-Za-z0-9_./?=&%:-]*)',text)))
+                      row['endpoint_string_count']=len(endpoint_strings)
+                      row['endpoint_strings']=endpoint_strings[:100]
+                      if depth<2:
+                          for u in sorted(links(text,final)):
+                              if any(k in u.lower() for k in ('api','download','export','data','label','search','swagger','openapi','sitemap','.js','.json','.csv','.zip','.xlsx')):
+                                  discovered.add(u); q.append((u,depth+1))
+                      snap_name=f'{len(records):03d}_{hashlib.sha1(final.encode()).hexdigest()[:12]}.txt'
+                      (OUT/snap_name).write_text(text[:500000],encoding='utf-8')
+                      row['snapshot']=snap_name
+                  # Preserve small official bulk/API payload candidates.
+                  if len(body)<=20_000_000 and (suffix in ('.json','.csv','.zip','.xlsx') or any(t in ctype.lower() for t in ('application/json','text/csv','application/zip','spreadsheet'))):
+                      fname=pathlib.Path(urllib.parse.urlsplit(final).path).name or f'payload_{len(records):03d}'
+                      fname=re.sub(r'[^A-Za-z0-9._-]+','_',fname)[:180]
+                      target=DOWNLOADS/f'{len(records):03d}_{fname}'
+                      target.write_bytes(body)
+                      row['download_file']=target.relative_to(OUT).as_posix()
+                      if zipfile.is_zipfile(io.BytesIO(body)):
+                          with zipfile.ZipFile(io.BytesIO(body)) as zf:
+                              row['zip_member_count']=len(zf.infolist())
+                              row['zip_crc']='pass' if zf.testzip() is None else 'fail'
+              except Exception as exc:
+                  row['error']=repr(exc)
+              records.append(row)
+              time.sleep(0.5)
+
+          # Inspect JavaScript snapshots for API bases and route strings.
+          routes=set()
+          for txt in OUT.glob('*.txt'):
+              text=txt.read_text(encoding='utf-8',errors='replace')
+              for m in re.finditer(r'(?i)(?:https?://[^\s"\'<>]+|/[A-Za-z0-9_./?=&%:-]+)',text):
+                  s=m.group(0).rstrip('),;')
+                  if any(k in s.lower() for k in ('api','label','ingredient','product','search','download','export','dsld')):
+                      routes.add(s)
+          (OUT/'route_candidates.txt').write_text(''.join(x+'\n' for x in sorted(routes)),encoding='utf-8')
+          (OUT/'crawl_records.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n' for r in records),encoding='utf-8')
+          summary={'visited_count':len(visited),'successful_count':sum(1 for r in records if r.get('status')==200),'error_count':sum(1 for r in records if 'error' in r),'discovered_url_count':len(discovered),'candidate_data_payload_count':len(candidate_data),'downloaded_payload_count':sum(1 for r in records if r.get('download_file')),'route_candidate_count':len(routes),'records':records}
+          (OUT/'recon_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({k:v for k,v in summary.items() if k!='records'},ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit results
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/dsld-recon -czf temp-results/dsld-recon/latest.tar.gz latest
+          sha256sum temp-results/dsld-recon/latest.tar.gz > temp-results/dsld-recon/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/dsld-recon
+          git commit -m 'chore: record temporary NIH DSLD reconnaissance' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
