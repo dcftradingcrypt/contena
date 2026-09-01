@@ -1,0 +1,159 @@
+name: Temporary collect NIH DSLD label details
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_collect_dsld_label_details.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Retrieve bounded official label details
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/dsld-label-details/latest
+          mkdir -p temp-results/dsld-label-details/latest/payloads
+          python3 - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, pathlib, re, time, urllib.parse, urllib.request
+          from typing import Any
+
+          OUT=pathlib.Path('temp-results/dsld-label-details/latest')
+          PAYLOADS=OUT/'payloads'
+          UA='Mozilla/5.0 (compatible; EiyouNote-public-nutrition-research/1.0; +https://github.com/dcftradingcrypt/contena)'
+          HEADERS={'User-Agent':UA,'Accept':'application/json,text/plain,*/*;q=0.5','Accept-Language':'en-US,en;q=0.9'}
+          def sha(b:bytes): return hashlib.sha256(b).hexdigest()
+          def fetch(url,max_bytes=12_000_000):
+              req=urllib.request.Request(url,headers=HEADERS)
+              with urllib.request.urlopen(req,timeout=45) as r:
+                  body=r.read(max_bytes+1)
+                  if len(body)>max_bytes: raise RuntimeError('payload too large')
+                  return getattr(r,'status',200),r.geturl(),{k.lower():v for k,v in r.headers.items()},body
+          def walk(v:Any):
+              if isinstance(v,dict):
+                  yield v
+                  for x in v.values(): yield from walk(x)
+              elif isinstance(v,list):
+                  for x in v: yield from walk(x)
+
+          search_path=pathlib.Path('temp-results/dsld-verified/latest/search_records.jsonl')
+          if not search_path.exists():
+              raise RuntimeError('DSLD search records are unavailable')
+          search=[json.loads(x) for x in search_path.read_text(encoding='utf-8').splitlines() if x.strip()]
+          ids=[]; explicit_urls=[]
+          for rec in search:
+              response=rec.get('response')
+              if response is None: continue
+              for obj in walk(response):
+                  for key in ('dsld_id','dsldId','label_id','labelId','product_id','productId','id'):
+                      val=obj.get(key) if isinstance(obj,dict) else None
+                      if isinstance(val,(int,str)) and str(val).strip() and len(str(val))<80:
+                          ids.append(str(val).strip())
+                  for key in ('url','labelUrl','detailUrl','productUrl'):
+                      val=obj.get(key) if isinstance(obj,dict) else None
+                      if isinstance(val,str) and val.startswith('http') and ('dsld' in val or 'api.ods' in val):
+                          explicit_urls.append(val)
+          # Stable order, bounded collection.
+          seen=set(); unique_ids=[]
+          for x in ids:
+              if x not in seen:
+                  seen.add(x); unique_ids.append(x)
+          unique_ids=unique_ids[:120]
+
+          patterns=[
+              'https://api.ods.od.nih.gov/dsld/v9/label/{id}',
+              'https://api.ods.od.nih.gov/dsld/v9/labels/{id}',
+              'https://api.ods.od.nih.gov/dsld/v9/label/{id}/full',
+              'https://api.ods.od.nih.gov/dsld/v9/labels/{id}/full',
+              'https://api.ods.od.nih.gov/dsld/v9/label?id={id}',
+              'https://api.ods.od.nih.gov/dsld/v9/labels?id={id}',
+          ]
+          records=[]; successful=[]
+          for idx,label_id in enumerate(unique_ids):
+              candidates=[]
+              for u in explicit_urls:
+                  if label_id in u: candidates.append(u)
+              candidates.extend(p.format(id=urllib.parse.quote(label_id,safe='')) for p in patterns)
+              row={'candidate_id':label_id,'attempts':[]}
+              for url in candidates:
+                  attempt={'url':url}
+                  try:
+                      status,final,headers,body=fetch(url)
+                      text=body.decode('utf-8','replace')
+                      obj=json.loads(text) if text.lstrip().startswith(('{','[')) else None
+                      attempt.update({'status':status,'final_url':final,'content_type':headers.get('content-type'),'size_bytes':len(body),'sha256':sha(body),'json_type':type(obj).__name__ if obj is not None else None})
+                      if obj is not None and len(body)>20:
+                          fname=f'{idx:03d}_{re.sub(r"[^A-Za-z0-9_.-]+","_",label_id)[:60]}_{hashlib.sha1(final.encode()).hexdigest()[:8]}.json'
+                          (PAYLOADS/fname).write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+                          attempt['payload_file']=fname
+                          row['selected_url']=final
+                          row['selected_payload']=fname
+                          row['selected_sha256']=sha(body)
+                          row['detail_status']='retrieved'
+                          successful.append({'candidate_id':label_id,'source_url':final,'payload_file':fname,'sha256':sha(body),'payload':obj})
+                          row['attempts'].append(attempt)
+                          break
+                  except Exception as exc:
+                      attempt['error']=repr(exc)
+                  row['attempts'].append(attempt)
+                  time.sleep(0.15)
+              if 'detail_status' not in row: row['detail_status']='unresolved'
+              records.append(row)
+
+          def find_first(obj:Any,names):
+              wanted={x.casefold() for x in names}
+              for d in walk(obj):
+                  if not isinstance(d,dict): continue
+                  for k,v in d.items():
+                      if k.casefold() in wanted and v not in (None,'',[],{}): return v
+              return None
+
+          normalized=[]
+          for item in successful:
+              obj=item['payload']
+              product_name=find_first(obj,('productName','product_name','fullName','labelName','name'))
+              brand=find_first(obj,('brandName','brand_name','brand','manufacturerName','manufacturer'))
+              upc=find_first(obj,('upc','gtin','barcode'))
+              serving=find_first(obj,('servingSize','serving_size','serving'))
+              ingredients=[]
+              for d in walk(obj):
+                  if not isinstance(d,dict): continue
+                  keys={k.casefold() for k in d}
+                  if any(k in keys for k in ('ingredientname','ingredient_name','ingredient','dietaryingredientname')) and any(k in keys for k in ('amount','quantity','amountperserving','servingamount')):
+                      ingredients.append(d)
+              normalized.append({'candidate_id':item['candidate_id'],'source_url':item['source_url'],'source_sha256':item['sha256'],'product_name':product_name,'brand':brand,'upc':upc,'serving_raw':serving,'ingredient_object_count':len(ingredients),'ingredient_objects':ingredients,'runtime_admission_allowed':False})
+
+          def write_jsonl(path,rows):
+              with open(path,'w',encoding='utf-8',newline='\n') as f:
+                  for r in rows: f.write(json.dumps(r,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n')
+          write_jsonl(OUT/'detail_attempts.jsonl',records)
+          write_jsonl(OUT/'normalized_label_candidates.jsonl',normalized)
+          summary={'candidate_ids':len(unique_ids),'details_retrieved':len(successful),'details_unresolved':len(unique_ids)-len(successful),'normalized_labels':len(normalized),'labels_with_ingredient_objects':sum(1 for r in normalized if r['ingredient_object_count']>0),'runtime_admission':0}
+          (OUT/'collection_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit results
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/dsld-label-details -czf temp-results/dsld-label-details/latest.tar.gz latest
+          sha256sum temp-results/dsld-label-details/latest.tar.gz > temp-results/dsld-label-details/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/dsld-label-details
+          git commit -m 'chore: record temporary NIH DSLD label details' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
