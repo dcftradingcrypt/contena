@@ -1,0 +1,433 @@
+name: Temporary collect public iHerb supplement facts
+
+on:
+  push:
+    branches:
+      - temp/nutrition-data-collection-20260901
+    paths:
+      - .github/workflows/temp_collect_iherb_supplement_facts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/nutrition-data-collection-20260901
+
+      - name: Collect public supplement facts without account or purchase data
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf temp-results/nutrition-supplement-collection/latest
+          mkdir -p temp-results/nutrition-supplement-collection/latest
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import concurrent.futures
+          import hashlib
+          import html
+          import json
+          import pathlib
+          import random
+          import re
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          import urllib.robotparser
+          import xml.etree.ElementTree as ET
+          from dataclasses import dataclass
+          from typing import Any
+
+          OUT = pathlib.Path('temp-results/nutrition-supplement-collection/latest')
+          OUT.mkdir(parents=True, exist_ok=True)
+
+          USER_AGENT = (
+              'Mozilla/5.0 (compatible; EiyouNote-public-nutrition-research/1.0; '
+              '+https://github.com/dcftradingcrypt/contena)'
+          )
+          HEADERS = {
+              'User-Agent': USER_AGENT,
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5',
+              'Accept-Language': 'en-US,en;q=0.9,ja;q=0.7',
+              'Cache-Control': 'no-cache',
+          }
+          MAX_PAGE_BYTES = 5_000_000
+          MAX_PRODUCTS = 240
+
+          SEARCH_TERMS = [
+              'vitamin a', 'beta carotene', 'vitamin d', 'vitamin e', 'vitamin k',
+              'thiamin', 'riboflavin', 'niacin nicotinic acid', 'niacinamide',
+              'vitamin b6', 'folic acid', 'methylfolate', 'folinic acid',
+              'vitamin b12', 'biotin', 'pantothenic acid', 'vitamin c',
+              'calcium', 'phosphorus', 'magnesium', 'iron', 'zinc', 'copper',
+              'manganese', 'iodine', 'selenium', 'chromium', 'molybdenum',
+              'potassium', 'choline', 'boron', 'omega 3', 'epa dha', 'dha',
+              'alpha linolenic acid', 'linoleic acid', 'multivitamin',
+              'multimineral', 'electrolyte supplement', 'fiber supplement',
+          ]
+
+          SEED_URLS = [
+              'https://www.iherb.com/pr/natrol-triple-magnesium-60-capsules/159973',
+              'https://www.iherb.com/pr/ip-6-international-ip6-gold-immune-support-formula-powder-unflavored-308-g/104667',
+              'https://www.iherb.com/pr/nature-s-way-alive-max-6-potency-adult-complete-multivitamin-with-iron-90-capsules/1867',
+              'https://www.iherb.com/pr/life-extension-mix-tablets-without-copper-240-tablets/87144',
+          ]
+
+          def sha256(data: bytes) -> str:
+              return hashlib.sha256(data).hexdigest()
+
+          def fetch(url: str, timeout: int = 60) -> tuple[int, str, dict[str, str], bytes]:
+              req = urllib.request.Request(url, headers=HEADERS)
+              with urllib.request.urlopen(req, timeout=timeout) as response:
+                  body = response.read(MAX_PAGE_BYTES)
+                  headers = {k.lower(): v for k, v in response.headers.items()}
+                  return getattr(response, 'status', 200), response.geturl(), headers, body
+
+          def clean_url(url: str) -> str | None:
+              url = html.unescape(url).replace('\\/', '/')
+              parsed = urllib.parse.urlsplit(url)
+              if parsed.scheme not in ('http', 'https'):
+                  return None
+              host = parsed.netloc.lower().split(':')[0]
+              if host not in ('www.iherb.com', 'iherb.com', 'jp.iherb.com'):
+                  return None
+              path = re.sub(r'/+', '/', parsed.path)
+              if '/pr/' not in path.lower():
+                  return None
+              # Remove tracking and fragments; product ID remains in path.
+              return urllib.parse.urlunsplit(('https', 'www.iherb.com', path.rstrip('/'), '', ''))
+
+          def product_urls_from_text(text: str, base_url: str) -> set[str]:
+              found: set[str] = set()
+              patterns = [
+                  r'https?://(?:www\\.|jp\\.)?iherb\\.com/pr/[^\\s"\'<>\\\\]+',
+                  r'(?P<q>["\'])(/pr/[^"\'<>]+)(?P=q)',
+                  r'(?P<q>["\'])(https?:\\/\\/(?:www\\.|jp\\.)?iherb\\.com\\/pr\\/[^"\'<>]+)(?P=q)',
+              ]
+              for pattern in patterns:
+                  for match in re.finditer(pattern, text, re.I):
+                      raw = match.group(0)
+                      if raw.startswith(('"', "'")):
+                          groups = match.groups()
+                          raw = groups[-1]
+                      if raw.startswith('/'):
+                          raw = urllib.parse.urljoin(base_url, raw)
+                      normalized = clean_url(raw)
+                      if normalized:
+                          found.add(normalized)
+              return found
+
+          def robots_policy() -> tuple[urllib.robotparser.RobotFileParser | None, dict[str, Any]]:
+              url = 'https://www.iherb.com/robots.txt'
+              meta: dict[str, Any] = {'url': url}
+              try:
+                  status, final_url, headers, body = fetch(url)
+                  text = body.decode('utf-8', 'replace')
+                  (OUT / 'robots.txt').write_text(text, encoding='utf-8')
+                  rp = urllib.robotparser.RobotFileParser()
+                  rp.set_url(url)
+                  rp.parse(text.splitlines())
+                  meta.update({'status': status, 'final_url': final_url, 'sha256': sha256(body), 'bytes': len(body)})
+                  return rp, meta
+              except Exception as exc:
+                  meta['error'] = repr(exc)
+                  return None, meta
+
+          rp, robots_meta = robots_policy()
+
+          def allowed(url: str) -> bool:
+              if rp is None:
+                  # Fail closed for broad crawling. Explicit seeds remain eligible for a single retrieval.
+                  return url in SEED_URLS
+              return rp.can_fetch(USER_AGENT, url)
+
+          discovery_log: list[dict[str, Any]] = []
+          discovered: set[str] = set(SEED_URLS)
+
+          # Sitemap discovery is used only when permitted and available.
+          sitemap_queue = [
+              'https://www.iherb.com/sitemap.xml',
+              'https://www.iherb.com/sitemap_index.xml',
+          ]
+          visited_sitemaps: set[str] = set()
+          while sitemap_queue and len(visited_sitemaps) < 30 and len(discovered) < MAX_PRODUCTS:
+              sitemap_url = sitemap_queue.pop(0)
+              if sitemap_url in visited_sitemaps:
+                  continue
+              visited_sitemaps.add(sitemap_url)
+              row: dict[str, Any] = {'kind': 'sitemap', 'url': sitemap_url}
+              if not allowed(sitemap_url):
+                  row['status'] = 'robots_disallowed'
+                  discovery_log.append(row)
+                  continue
+              try:
+                  status, final_url, headers, body = fetch(sitemap_url)
+                  row.update({'http_status': status, 'final_url': final_url, 'bytes': len(body), 'sha256': sha256(body)})
+                  text = body.decode('utf-8', 'replace')
+                  locs = re.findall(r'<loc>\\s*(.*?)\\s*</loc>', text, re.I | re.S)
+                  for loc in locs:
+                      loc = html.unescape(loc.strip())
+                      purl = clean_url(loc)
+                      if purl:
+                          discovered.add(purl)
+                      elif ('sitemap' in loc.lower() or loc.lower().endswith(('.xml', '.xml.gz'))) and len(sitemap_queue) < 60:
+                          sitemap_queue.append(loc)
+                  row['loc_count'] = len(locs)
+                  row['product_urls_after'] = len(discovered)
+              except Exception as exc:
+                  row['error'] = repr(exc)
+              discovery_log.append(row)
+              time.sleep(1.0)
+
+          # Keyword pages provide a bounded, nutrient-focused discovery set.
+          for term in SEARCH_TERMS:
+              if len(discovered) >= MAX_PRODUCTS:
+                  break
+              url = 'https://www.iherb.com/search?' + urllib.parse.urlencode({'kw': term})
+              row = {'kind': 'search', 'term': term, 'url': url}
+              if not allowed(url):
+                  row['status'] = 'robots_disallowed'
+                  discovery_log.append(row)
+                  continue
+              try:
+                  status, final_url, headers, body = fetch(url)
+                  text = body.decode('utf-8', 'replace')
+                  urls = product_urls_from_text(text, final_url)
+                  # Keep only the first bounded set per nutrient query.
+                  for purl in sorted(urls)[:12]:
+                      if len(discovered) >= MAX_PRODUCTS:
+                          break
+                      discovered.add(purl)
+                  row.update({'http_status': status, 'final_url': final_url, 'bytes': len(body), 'sha256': sha256(body), 'product_url_count': len(urls), 'product_urls_after': len(discovered)})
+              except Exception as exc:
+                  row['error'] = repr(exc)
+              discovery_log.append(row)
+              time.sleep(1.2)
+
+          product_urls = sorted(discovered)[:MAX_PRODUCTS]
+
+          def strip_tags(raw: str) -> str:
+              raw = re.sub(r'(?is)<script[^>]*>.*?</script>', ' ', raw)
+              raw = re.sub(r'(?is)<style[^>]*>.*?</style>', ' ', raw)
+              raw = re.sub(r'(?i)<br\\s*/?>', '\\n', raw)
+              raw = re.sub(r'(?i)</(?:p|div|li|tr|td|th|h[1-6])>', '\\n', raw)
+              raw = re.sub(r'(?s)<[^>]+>', ' ', raw)
+              raw = html.unescape(raw)
+              raw = raw.replace('\\u0026', '&')
+              raw = re.sub(r'[ \\t]+', ' ', raw)
+              raw = re.sub(r'\\n\\s*\\n+', '\\n', raw)
+              return raw.strip()
+
+          def extract_json_ld(page: str) -> list[Any]:
+              values=[]
+              for match in re.finditer(r'(?is)<script[^>]+type=["\']application/ld\\+json["\'][^>]*>(.*?)</script>', page):
+                  raw=html.unescape(match.group(1).strip())
+                  try:
+                      values.append(json.loads(raw))
+                  except Exception:
+                      pass
+              return values
+
+          def walk_json(value: Any):
+              if isinstance(value, dict):
+                  yield value
+                  for child in value.values():
+                      yield from walk_json(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      yield from walk_json(child)
+
+          def first_product_json(values: list[Any]) -> dict[str, Any] | None:
+              for top in values:
+                  for obj in walk_json(top):
+                      typ=obj.get('@type')
+                      types=typ if isinstance(typ,list) else [typ]
+                      if any(str(x).lower()=='product' for x in types if x is not None):
+                          return obj
+              return None
+
+          def facts_excerpt(page: str, text: str) -> str | None:
+              candidates=[]
+              for pattern in (
+                  r'(?is)Supplement Facts.{0,30000}?(?:Other ingredients|Suggested use|Warnings|Disclaimer)',
+                  r'(?is)Supplement Facts.{0,18000}',
+                  r'(?is)Nutrition Facts.{0,18000}',
+              ):
+                  m=re.search(pattern,page)
+                  if m:
+                      candidates.append(strip_tags(m.group(0)))
+                  m2=re.search(pattern,text)
+                  if m2:
+                      candidates.append(m2.group(0))
+              candidates=[re.sub(r'\\n{3,}','\\n\\n',c).strip() for c in candidates if c and len(c)>20]
+              return max(candidates,key=len)[:24000] if candidates else None
+
+          AMOUNT_RE = re.compile(
+              r'(?P<amount><\\s*)?(?P<num>\\d+(?:[.,]\\d+)?)\\s*'
+              r'(?P<unit>mcg|µg|ug|mg|g|IU|i\\.?u\\.?|ml|mL)\\b', re.I
+          )
+          PERCENT_RE = re.compile(r'(?P<pct>\\d+(?:[.,]\\d+)?)\\s*%')
+
+          def serving_from_excerpt(excerpt: str | None) -> dict[str, Any]:
+              if not excerpt:
+                  return {'raw': None, 'quantity': None, 'unit': None, 'parse_status': 'not_found'}
+              patterns=[
+                  r'(?im)^\\s*Serving Size\\s*:?\\s*(?P<qty>\\d+(?:[.,]\\d+)?)?\\s*(?P<unit>[^\\n]{1,80})$',
+                  r'(?i)Serving Size\\s*:?\\s*(?P<qty>\\d+(?:[.,]\\d+)?)?\\s*(?P<unit>[^;|]{1,80})',
+              ]
+              for pattern in patterns:
+                  m=re.search(pattern,excerpt)
+                  if m:
+                      raw=m.group(0).strip()
+                      qty=m.groupdict().get('qty')
+                      unit=(m.groupdict().get('unit') or '').strip(' :,-')
+                      return {'raw':raw,'quantity':float(qty.replace(',','.')) if qty else None,'unit':unit or None,'parse_status':'parsed'}
+              return {'raw': None, 'quantity': None, 'unit': None, 'parse_status': 'not_found'}
+
+          def component_lines(excerpt: str | None) -> list[dict[str, Any]]:
+              if not excerpt:
+                  return []
+              lines=[]
+              # Normalize common separators from flattened responsive tables.
+              text=excerpt.replace('•','\\n').replace(' | ','\\n')
+              raw_lines=[re.sub(r'\\s+',' ',x).strip() for x in text.splitlines()]
+              for line_no,line in enumerate(raw_lines,1):
+                  if len(line)<3 or len(line)>500:
+                      continue
+                  lower=line.lower()
+                  if any(lower.startswith(x) for x in ('serving size','servings per container','amount per serving','supplement facts','daily value','other ingredients','suggested use','warnings')):
+                      continue
+                  matches=list(AMOUNT_RE.finditer(line))
+                  if not matches:
+                      continue
+                  # Prefer the first explicit absolute amount; percent DV is stored separately.
+                  m=matches[0]
+                  name=line[:m.start()].strip(' :-*†')
+                  if not name or len(name)>220:
+                      continue
+                  num=float(m.group('num').replace(',','.'))
+                  unit=m.group('unit')
+                  comparator='<' if m.group('amount') else '='
+                  tail=line[m.end():]
+                  pct=PERCENT_RE.search(tail)
+                  form=None
+                  fm=re.search(r'\\((?:as|from|providing|of which)\\s+([^)]{1,160})\\)',name,re.I)
+                  if fm:
+                      form=fm.group(1).strip()
+                  lines.append({'line_no':line_no,'raw_line':line,'raw_name':name,'amount':num,'unit':unit,'comparator':comparator,'percent_dv':float(pct.group('pct').replace(',','.')) if pct else None,'chemical_form_raw':form,'parse_status':'heuristic_candidate'})
+              return lines
+
+          def parse_page(url: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+              result: dict[str, Any]={'source_url':url,'source':'iHerb public product page'}
+              components=[]
+              try:
+                  if not allowed(url) and url not in SEED_URLS:
+                      result['fetch_status']='robots_disallowed'
+                      return result,components
+                  status,final_url,headers,body=fetch(url)
+                  page=body.decode('utf-8','replace')
+                  text=strip_tags(page)
+                  jlds=extract_json_ld(page)
+                  pobj=first_product_json(jlds) or {}
+                  title_match=re.search(r'(?is)<title[^>]*>(.*?)</title>',page)
+                  brand=pobj.get('brand')
+                  if isinstance(brand,dict):
+                      brand=brand.get('name')
+                  excerpt=facts_excerpt(page,text)
+                  serving=serving_from_excerpt(excerpt)
+                  components=component_lines(excerpt)
+                  path=urllib.parse.urlsplit(final_url).path
+                  id_match=re.search(r'/(\\d+)(?:/)?$',path)
+                  result.update({
+                      'fetch_status':'fetched',
+                      'http_status':status,
+                      'final_url':final_url,
+                      'content_type':headers.get('content-type'),
+                      'page_size_bytes':len(body),
+                      'page_sha256':sha256(body),
+                      'product_id':id_match.group(1) if id_match else None,
+                      'product_name':pobj.get('name') or (strip_tags(title_match.group(1)) if title_match else None),
+                      'brand':brand,
+                      'sku':pobj.get('sku'),
+                      'gtin':pobj.get('gtin13') or pobj.get('gtin12') or pobj.get('gtin'),
+                      'serving':serving,
+                      'supplement_facts_found':bool(excerpt),
+                      'facts_excerpt_sha256':sha256(excerpt.encode('utf-8')) if excerpt else None,
+                      'facts_excerpt':excerpt,
+                      'component_candidate_count':len(components),
+                      'source_captured_at_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),
+                      'runtime_admission_allowed':False,
+                  })
+                  for c in components:
+                      c.update({'source_url':final_url,'product_id':result.get('product_id'),'product_name':result.get('product_name'),'brand':brand,'page_sha256':result['page_sha256'],'serving':serving,'runtime_admission_allowed':False})
+              except urllib.error.HTTPError as exc:
+                  result.update({'fetch_status':'http_error','http_status':exc.code,'error':repr(exc)})
+              except Exception as exc:
+                  result.update({'fetch_status':'error','error':repr(exc)})
+              return result,components
+
+          products=[]
+          components=[]
+          # Four workers, bounded product set, no retries that bypass blocking controls.
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+              futures={executor.submit(parse_page,url):url for url in product_urls}
+              for future in concurrent.futures.as_completed(futures):
+                  p,cs=future.result()
+                  products.append(p)
+                  components.extend(cs)
+
+          products.sort(key=lambda x:(x.get('product_id') or '',x.get('source_url') or ''))
+          components.sort(key=lambda x:(x.get('product_id') or '',x.get('line_no') or 0))
+
+          def write_jsonl(path: pathlib.Path, rows: list[dict[str,Any]]):
+              with path.open('w',encoding='utf-8',newline='\\n') as f:
+                  for row in rows:
+                      f.write(json.dumps(row,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\\n')
+
+          write_jsonl(OUT/'product_candidates.jsonl',products)
+          write_jsonl(OUT/'component_candidates.jsonl',components)
+          write_jsonl(OUT/'discovery_log.jsonl',discovery_log)
+          (OUT/'product_urls.txt').write_text(''.join(u+'\\n' for u in product_urls),encoding='utf-8')
+          (OUT/'robots_metadata.json').write_text(json.dumps(robots_meta,ensure_ascii=False,indent=2)+'\\n',encoding='utf-8')
+
+          summary={
+              'discovered_product_urls':len(product_urls),
+              'fetched_products':sum(1 for p in products if p.get('fetch_status')=='fetched'),
+              'http_or_other_errors':sum(1 for p in products if p.get('fetch_status') not in ('fetched',)),
+              'products_with_supplement_facts_excerpt':sum(1 for p in products if p.get('supplement_facts_found')),
+              'products_with_parsed_serving':sum(1 for p in products if (p.get('serving') or {}).get('parse_status')=='parsed'),
+              'products_with_component_candidates':sum(1 for p in products if p.get('component_candidate_count',0)>0),
+              'component_candidate_rows':len(components),
+              'robots_metadata':robots_meta,
+              'runtime_admission':0,
+              'collection_scope':'public product and Supplement Facts data only; no account, purchase, price, review, or personal data',
+          }
+          (OUT/'collection_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\\n',encoding='utf-8')
+
+          # Hash every produced file. The raw HTML is not redistributed; source-page and excerpt hashes are retained.
+          manifest=[]
+          for p in sorted(x for x in OUT.rglob('*') if x.is_file()):
+              data=p.read_bytes()
+              manifest.append({'path':p.relative_to(OUT).as_posix(),'size_bytes':len(data),'sha256':sha256(data)})
+          (OUT/'source_manifest.json').write_text(json.dumps({'files':manifest},ensure_ascii=False,indent=2)+'\\n',encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Pack and commit results
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C temp-results/nutrition-supplement-collection -czf temp-results/nutrition-supplement-collection/latest.tar.gz latest
+          sha256sum temp-results/nutrition-supplement-collection/latest.tar.gz > temp-results/nutrition-supplement-collection/latest.tar.gz.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add temp-results/nutrition-supplement-collection
+          git commit -m 'chore: record temporary public supplement-data collection' || exit 0
+          git push origin HEAD:temp/nutrition-data-collection-20260901
